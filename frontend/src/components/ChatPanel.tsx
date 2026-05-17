@@ -1,0 +1,350 @@
+import { ArrowUpOutlined, PlusOutlined, PushpinOutlined } from "@ant-design/icons";
+import { App, Button, Segmented } from "antd";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import dayjs from "dayjs";
+import { useEffect, useMemo, useRef, useState } from "react";
+import ReactMarkdown from "react-markdown";
+
+import { apiErrorMessage } from "../api/client";
+import { pinChatMessage } from "../api/intel";
+import {
+  createSession,
+  listMessages,
+  listSessions,
+  streamUrl,
+  updateSession,
+} from "../api/qa";
+import type { ChatMessage, ChatMode, Citation } from "../types/api";
+import { consumeStream } from "../utils/sse";
+import CitationPanel from "./CitationPanel";
+
+const CHAT_MODE_OPTIONS = [
+  { label: "默认", value: "default" },
+  { label: "导师", value: "mentor" },
+  { label: "入门", value: "beginner" },
+  { label: "辩论", value: "debate" },
+  { label: "审稿人", value: "reviewer" },
+];
+
+interface Props {
+  topicId: number;
+}
+
+export default function ChatPanel({ topicId }: Props) {
+  const qc = useQueryClient();
+  const { message: msg } = App.useApp();
+  const [activeSessionId, setActiveSessionId] = useState<number | null>(null);
+  const [draft, setDraft] = useState("");
+  const [streaming, setStreaming] = useState(false);
+  const [streamBuffer, setStreamBuffer] = useState("");
+  const [streamCitations, setStreamCitations] = useState<Citation[]>([]);
+  const abortRef = useRef<AbortController | null>(null);
+  const scrollRef = useRef<HTMLDivElement | null>(null);
+
+  const sessionsQ = useQuery({
+    queryKey: ["chat-sessions", topicId],
+    queryFn: () => listSessions(topicId),
+  });
+
+  useEffect(() => {
+    if (!activeSessionId && sessionsQ.data && sessionsQ.data.length > 0) {
+      setActiveSessionId(sessionsQ.data[0].id);
+    }
+  }, [activeSessionId, sessionsQ.data]);
+
+  const activeSession = useMemo(
+    () => (sessionsQ.data || []).find((s) => s.id === activeSessionId),
+    [sessionsQ.data, activeSessionId],
+  );
+  const currentMode: ChatMode = (activeSession?.mode as ChatMode) || "default";
+
+  const modeMut = useMutation({
+    mutationFn: async (mode: ChatMode) => {
+      if (!activeSessionId) return null;
+      return updateSession(topicId, activeSessionId, { mode });
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["chat-sessions", topicId] });
+    },
+    onError: (e) => msg.error(apiErrorMessage(e)),
+  });
+
+  const messagesQ = useQuery({
+    queryKey: ["chat-messages", topicId, activeSessionId],
+    queryFn: () => listMessages(topicId, activeSessionId!),
+    enabled: !!activeSessionId,
+  });
+
+  const newSession = useMutation({
+    mutationFn: () => createSession(topicId, "新会话"),
+    onSuccess: (s) => {
+      qc.invalidateQueries({ queryKey: ["chat-sessions", topicId] });
+      setActiveSessionId(s.id);
+    },
+  });
+
+  useEffect(() => {
+    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight });
+  }, [messagesQ.data, streamBuffer]);
+
+  const send = async () => {
+    const content = draft.trim();
+    if (!content || streaming) return;
+    let sid = activeSessionId;
+    if (!sid) {
+      try {
+        const s = await createSession(topicId, content.slice(0, 30));
+        qc.invalidateQueries({ queryKey: ["chat-sessions", topicId] });
+        sid = s.id;
+        setActiveSessionId(sid);
+      } catch (e) {
+        msg.error(apiErrorMessage(e));
+        return;
+      }
+    }
+    setDraft("");
+    setStreaming(true);
+    setStreamBuffer("");
+    setStreamCitations([]);
+    const url = streamUrl(topicId, sid!, content);
+    const ctrl = new AbortController();
+    abortRef.current = ctrl;
+
+    try {
+      qc.setQueryData<ChatMessage[]>(["chat-messages", topicId, sid], (prev) => [
+        ...(prev || []),
+        {
+          id: -Date.now(),
+          session_id: sid!,
+          role: "user",
+          content,
+          citations: [],
+          created_at: new Date().toISOString(),
+        },
+      ]);
+
+      await consumeStream(
+        url,
+        {
+          onCitations: (items) => setStreamCitations(items as Citation[]),
+          onToken: (t) => setStreamBuffer((prev) => prev + t),
+          onDone: () => {
+            setStreaming(false);
+            qc.invalidateQueries({ queryKey: ["chat-messages", topicId, sid] });
+            setStreamBuffer("");
+          },
+          onError: (m) => {
+            msg.error(m);
+            setStreaming(false);
+          },
+        },
+        ctrl.signal
+      );
+    } catch (e) {
+      setStreaming(false);
+      msg.error(apiErrorMessage(e));
+    }
+  };
+
+  const allMessages = useMemo(() => messagesQ.data || [], [messagesQ.data]);
+  const lastAssistantCitations = streaming
+    ? streamCitations
+    : allMessages.filter((m) => m.role === "assistant").slice(-1)[0]?.citations || [];
+
+  return (
+    <div className="chat-shell">
+      {/* Sessions sidebar */}
+      <div className="chat-sidebar">
+        <div className="chat-sidebar-head">
+          <span>会话</span>
+          <Button
+            size="small"
+            type="text"
+            icon={<PlusOutlined />}
+            onClick={() => newSession.mutate()}
+          />
+        </div>
+        <div className="chat-sidebar-list">
+          {(sessionsQ.data || []).map((s) => (
+            <div
+              key={s.id}
+              className={`chat-session-item ${s.id === activeSessionId ? "active" : ""}`}
+              onClick={() => setActiveSessionId(s.id)}
+            >
+              {s.title}
+            </div>
+          ))}
+          {sessionsQ.data && sessionsQ.data.length === 0 && (
+            <div
+              style={{
+                color: "var(--text-muted)",
+                fontSize: 12,
+                padding: "20px 12px",
+                textAlign: "center",
+                fontStyle: "italic",
+              }}
+            >
+              暂无会话
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Main chat thread */}
+      <div className="chat-main">
+        <div className="chat-thread" ref={scrollRef}>
+          {allMessages.length === 0 && !streaming ? (
+            <div className="chat-empty">
+              <div>
+                <div className="hint">问点什么？</div>
+                <div style={{ fontSize: 12.5, color: "var(--text-muted)" }}>
+                  系统会基于当前课题的语料 + 你的研究笔记回答。
+                </div>
+              </div>
+            </div>
+          ) : (
+            <>
+              {allMessages.map((m) => (
+                <MessageBubble key={m.id} message={m} topicId={topicId} />
+              ))}
+              {streaming && (
+                <MessageBubble
+                  message={{
+                    id: -1,
+                    session_id: activeSessionId!,
+                    role: "assistant",
+                    content: streamBuffer || "",
+                    citations: streamCitations,
+                    created_at: new Date().toISOString(),
+                  }}
+                  topicId={topicId}
+                  streaming
+                />
+              )}
+            </>
+          )}
+        </div>
+
+        <div
+          style={{
+            padding: "0 12px",
+            display: "flex",
+            justifyContent: "flex-start",
+            marginBottom: 4,
+          }}
+        >
+          <Segmented
+            size="small"
+            options={CHAT_MODE_OPTIONS}
+            value={currentMode}
+            onChange={(v) => modeMut.mutate(v as ChatMode)}
+            disabled={!activeSessionId || streaming}
+            data-testid="chat-mode-selector"
+          />
+        </div>
+        <div className="chat-input">
+          <textarea
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            placeholder="问点什么…  ⏎ 发送 · Shift+⏎ 换行"
+            rows={1}
+            onInput={(e) => {
+              const el = e.currentTarget;
+              el.style.height = "auto";
+              el.style.height = Math.min(el.scrollHeight, 140) + "px";
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                send();
+              }
+            }}
+            disabled={streaming}
+          />
+          <Button
+            type="primary"
+            icon={<ArrowUpOutlined />}
+            onClick={send}
+            loading={streaming}
+            disabled={!draft.trim()}
+            style={{ width: 36, height: 36, padding: 0, borderRadius: 999 }}
+          />
+        </div>
+      </div>
+
+      {/* Citations sidebar */}
+      <div className="chat-aside">
+        <div className="chat-aside-head">引用来源</div>
+        <div className="chat-aside-body">
+          <CitationPanel items={lastAssistantCitations} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function MessageBubble({
+  message,
+  topicId,
+  streaming = false,
+}: {
+  message: ChatMessage;
+  topicId: number;
+  streaming?: boolean;
+}) {
+  const isUser = message.role === "user";
+  const { message: msg } = App.useApp();
+  const canPin = !isUser && message.id > 0;
+  const pin = useMutation({
+    mutationFn: () => pinChatMessage(topicId, message.id),
+    onSuccess: () => msg.success("已 Pin 到研究笔记"),
+    onError: (e) => msg.error(apiErrorMessage(e)),
+  });
+
+  return (
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        alignItems: isUser ? "flex-end" : "flex-start",
+        gap: 4,
+      }}
+    >
+      <div
+        style={{
+          fontFamily: "var(--font-mono)",
+          fontSize: 10.5,
+          color: "var(--text-muted)",
+          letterSpacing: "0.08em",
+          textTransform: "uppercase",
+          padding: "0 4px",
+        }}
+      >
+        {isUser ? "you" : "assistant"} · {dayjs(message.created_at).format("HH:mm:ss")}
+      </div>
+      <div className={`chat-bubble ${isUser ? "user" : "assistant"}`}>
+        {isUser ? (
+          message.content
+        ) : (
+          <div className="markdown-body">
+            <ReactMarkdown>{message.content || "正在思考…"}</ReactMarkdown>
+            {streaming && <span className="caret" />}
+          </div>
+        )}
+        {canPin && (
+          <div className="bubble-actions">
+            <Button
+              size="small"
+              type="text"
+              icon={<PushpinOutlined />}
+              loading={pin.isPending}
+              onClick={() => pin.mutate()}
+            >
+              Pin
+            </Button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
