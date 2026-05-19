@@ -1,7 +1,10 @@
 import { createBrowserRouter, Navigate } from "react-router-dom";
 
 import AppLayout from "./components/AppLayout";
+import RequireAdmin from "./components/RequireAdmin";
 import RequireAuth from "./components/RequireAuth";
+import AdminHealthPage from "./pages/AdminHealthPage";
+import AdminUsersPage from "./pages/AdminUsersPage";
 import CrossTopicChatPage from "./pages/CrossTopicChatPage";
 import LoginPage from "./pages/LoginPage";
 import NotificationsPage from "./pages/NotificationsPage";
@@ -28,6 +31,22 @@ export const router = createBrowserRouter([
       { path: "qa/cross-topic", element: <CrossTopicChatPage /> },
       { path: "notifications", element: <NotificationsPage /> },
       { path: "settings", element: <SettingsPage /> },
+      {
+        path: "admin/users",
+        element: (
+          <RequireAdmin>
+            <AdminUsersPage />
+          </RequireAdmin>
+        ),
+      },
+      {
+        path: "admin/health",
+        element: (
+          <RequireAdmin>
+            <AdminHealthPage />
+          </RequireAdmin>
+        ),
+      },
     ],
   },
 ]);

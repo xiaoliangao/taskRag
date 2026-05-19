@@ -2,6 +2,8 @@ import {
   AppstoreOutlined,
   BellOutlined,
   ClusterOutlined,
+  CrownOutlined,
+  HeartOutlined,
   LogoutOutlined,
   PlusOutlined,
   SettingOutlined,
@@ -9,10 +11,10 @@ import {
 } from "@ant-design/icons";
 import { Badge, Dropdown, Tooltip } from "antd";
 import { useQuery } from "@tanstack/react-query";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Outlet, useLocation, useNavigate } from "react-router-dom";
 
-import { logout } from "../api/auth";
+import { fetchMe, logout } from "../api/auth";
 import { listNotifications } from "../api/notifications";
 import { listTopics } from "../api/topics";
 import { useAuthStore } from "../stores/authStore";
@@ -25,6 +27,24 @@ export default function AppLayout() {
   const location = useLocation();
   const { user, refreshToken, clear } = useAuthStore();
   const [createOpen, setCreateOpen] = useState(false);
+
+  // Refresh `is_admin` on mount — persisted user from older sessions may not
+  // have it set, and admin elevation needs to take effect without re-login.
+  useEffect(() => {
+    if (!user) return;
+    fetchMe()
+      .then((me) => {
+        if ((me.is_admin ?? false) !== (user.is_admin ?? false)) {
+          useAuthStore.setState({
+            user: { ...user, is_admin: me.is_admin ?? false },
+          });
+        }
+      })
+      .catch(() => {
+        /* token refresh interceptor handles 401 */
+      });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const { data: notif } = useQuery({
     queryKey: ["notifications-bell"],
@@ -56,6 +76,8 @@ export default function AppLayout() {
   const isCrossTopicActive = location.pathname.startsWith("/qa/cross-topic");
   const isNotificationsActive = location.pathname.startsWith("/notifications");
   const isSettingsActive = location.pathname.startsWith("/settings");
+  const isAdminUsersActive = location.pathname.startsWith("/admin/users");
+  const isAdminHealthActive = location.pathname.startsWith("/admin/health");
   const activeTopicId = (() => {
     const m = location.pathname.match(/^\/topics\/(\d+)/);
     return m ? Number(m[1]) : null;
@@ -126,6 +148,28 @@ export default function AppLayout() {
             <span>设置</span>
           </div>
         </div>
+
+        {user?.is_admin && (
+          <div className="nav-section">
+            <div className="nav-label" style={{ color: "var(--accent)" }}>
+              管理员
+            </div>
+            <div
+              className={`nav-item ${isAdminUsersActive ? "active" : ""}`}
+              onClick={() => navigate("/admin/users")}
+            >
+              <CrownOutlined />
+              <span>用户管理</span>
+            </div>
+            <div
+              className={`nav-item ${isAdminHealthActive ? "active" : ""}`}
+              onClick={() => navigate("/admin/health")}
+            >
+              <HeartOutlined />
+              <span>服务体征</span>
+            </div>
+          </div>
+        )}
 
         <div className="nav-section" style={{ flex: 1, overflow: "auto" }}>
           <div

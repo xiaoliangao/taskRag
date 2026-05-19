@@ -2,12 +2,14 @@ export interface UserPublic {
   id: number;
   email: string;
   created_at: string;
+  is_admin?: boolean;
 }
 
 export interface UserMe {
   id: number;
   email: string;
   settings: Record<string, unknown>;
+  is_admin?: boolean;
 }
 
 export interface TokenPair {
