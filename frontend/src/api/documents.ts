@@ -21,3 +21,23 @@ export async function getDocumentPdfBlobUrl(topicId: number, documentId: number)
   const blob = new Blob([resp.data], { type: "application/pdf" });
   return URL.createObjectURL(blob);
 }
+
+export interface UploadResult {
+  task_id: number | null;
+  status: string;
+  message?: string | null;
+}
+
+export async function uploadDocumentPdf(
+  topicId: number,
+  file: File,
+): Promise<UploadResult> {
+  const fd = new FormData();
+  fd.append("file", file);
+  const { data } = await client.post<UploadResult>(
+    `/topics/${topicId}/documents/upload`,
+    fd,
+    { headers: { "Content-Type": "multipart/form-data" } },
+  );
+  return data;
+}

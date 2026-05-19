@@ -1,4 +1,5 @@
 import {
+  ClockCircleOutlined,
   CloudDownloadOutlined,
   ClusterOutlined,
   CopyOutlined,
@@ -23,6 +24,7 @@ import { exportBibtex, exportMarkdown } from "../api/exports";
 import { generateGlossary, listGlossary } from "../api/glossary";
 import { getGraph, rebuildGraph } from "../api/graph";
 import type { GraphEdge, GraphNode } from "../types/api";
+import MethodTimelineView from "./MethodTimelineView";
 
 interface Props {
   topicId: number;
@@ -146,7 +148,7 @@ function GraphView({
                       </div>
                     }
                     description={
-                      <div style={{ fontSize: 11, color: "var(--text-muted)" }}>
+                      <div style={{ fontSize: 11, color: "var(--text-secondary)" }}>
                         {n.year ?? "n.d."} · {n.source ?? "—"} · 度数 {n.deg}
                       </div>
                     }
@@ -168,7 +170,7 @@ function GraphView({
                     #{e.source} ↔ #{e.target}
                   </span>
                   <Tag style={{ marginLeft: 8 }}>{e.type}</Tag>
-                  <span style={{ marginLeft: 6, fontSize: 11, color: "var(--text-muted)" }}>
+                  <span style={{ marginLeft: 6, fontSize: 11, color: "var(--text-secondary)" }}>
                     w={e.weight.toFixed(2)}
                   </span>
                 </List.Item>
@@ -206,7 +208,7 @@ function GlossaryView({ topicId }: { topicId: number }) {
           marginBottom: 10,
         }}
       >
-        <div style={{ fontSize: 12, color: "var(--text-muted)" }}>
+        <div style={{ fontSize: 12, color: "var(--text-secondary)" }}>
           为 Topic 内 top 术语生成简短中文定义（基于本地证据，禁止外部知识）。
         </div>
         <Button
@@ -236,9 +238,9 @@ function GlossaryView({ topicId }: { topicId: number }) {
               key={g.id}
               style={{
                 padding: 12,
-                border: "1px solid var(--border)",
+                border: "1px solid var(--border-default)",
                 borderRadius: 8,
-                background: "var(--bg-card, #fff)",
+                background: "var(--bg-surface, var(--bg-elevated))",
               }}
             >
               <div style={{ fontWeight: 500, marginBottom: 4 }}>{g.term}</div>
@@ -246,7 +248,7 @@ function GlossaryView({ topicId }: { topicId: number }) {
               <div
                 style={{
                   fontSize: 11,
-                  color: "var(--text-muted)",
+                  color: "var(--text-secondary)",
                   marginTop: 6,
                 }}
               >
@@ -324,7 +326,7 @@ function ExportView({ topicId }: { topicId: number }) {
       ) : (
         <pre
           style={{
-            background: "var(--bg-muted)",
+            background: "var(--bg-elevated)",
             padding: 12,
             borderRadius: 8,
             maxHeight: 360,
@@ -343,7 +345,7 @@ function ExportView({ topicId }: { topicId: number }) {
 }
 
 export default function TopicMapTab({ topicId, onJumpDocument }: Props) {
-  const [sub, setSub] = useState<"graph" | "glossary" | "export">("graph");
+  const [sub, setSub] = useState<"graph" | "timeline" | "glossary" | "export">("graph");
   return (
     <div>
       <div style={{ marginBottom: 16 }}>
@@ -352,12 +354,16 @@ export default function TopicMapTab({ topicId, onJumpDocument }: Props) {
           onChange={(v) => setSub(v as any)}
           options={[
             { label: "知识图谱", value: "graph", icon: <ClusterOutlined /> },
+            { label: "方法时间线", value: "timeline", icon: <ClockCircleOutlined /> },
             { label: "术语词典", value: "glossary", icon: <ReadOutlined /> },
             { label: "Export Hub", value: "export", icon: <CloudDownloadOutlined /> },
           ]}
         />
       </div>
       {sub === "graph" && <GraphView topicId={topicId} onJump={onJumpDocument} />}
+      {sub === "timeline" && (
+        <MethodTimelineView topicId={topicId} onJumpDocument={onJumpDocument} />
+      )}
       {sub === "glossary" && <GlossaryView topicId={topicId} />}
       {sub === "export" && <ExportView topicId={topicId} />}
     </div>

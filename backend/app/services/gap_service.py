@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 import logging
 import re
+from datetime import UTC
 from typing import Any
 
 from sqlalchemy.orm import Session
@@ -165,9 +166,9 @@ def generate_research_gaps(db: Session, topic_id: int, *, max_docs: int = 12) ->
             model_name=llm.cfg.model,
             generated_at=None,
         )
-        from datetime import datetime, timezone as _tz
+        from datetime import datetime
 
-        i.generated_at = datetime.now(tz=_tz.utc)
+        i.generated_at = datetime.now(tz=UTC)
         created_ids.append(i.id)
     db.flush()
     return created_ids

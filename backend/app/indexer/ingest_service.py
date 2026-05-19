@@ -3,7 +3,7 @@ from __future__ import annotations
 import hashlib
 import logging
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC
 from pathlib import Path
 
 from sqlalchemy.orm import Session
@@ -115,7 +115,6 @@ def ingest_raw_document(
     )
     if existing:
         document = existing
-        created = False
     else:
         document = Document(
             source=raw.source,
@@ -131,7 +130,6 @@ def ingest_raw_document(
         )
         db.add(document)
         db.flush()
-        created = True
 
     # 2) insert topic_documents association (ignore if exists)
     assoc_existing = (
@@ -180,7 +178,7 @@ def ingest_raw_document(
     # Insert chunks
     chunk_rows: list[Chunk] = []
     points: list[dict] = []
-    for c, vec in zip(chunks, vectors):
+    for c, vec in zip(chunks, vectors, strict=False):
         vid = stable_vector_id(document.source, document.external_id, c.chunk_index, document.doc_version)
         chunk_row = Chunk(
             document_id=document.id,
@@ -203,7 +201,7 @@ def ingest_raw_document(
                     "topic_ids": [topic_id],
                     "source": document.source,
                     "published_at": (
-                        document.published_at.astimezone(timezone.utc).isoformat()
+                        document.published_at.astimezone(UTC).isoformat()
                         if document.published_at
                         else None
                     ),

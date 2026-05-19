@@ -39,3 +39,38 @@ class ChatMessage(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
+
+
+class ChatSessionSummary(Base):
+    """LLM-generated summary of a chat session, injected as long-term memory (v1.4 Sprint 7)."""
+
+    __tablename__ = "chat_session_summaries"
+    __table_args__ = (
+        Index(
+            "ix_chat_session_summaries_user_topic",
+            "user_id",
+            "topic_id",
+            "generated_at",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    topic_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("topics.id", ondelete="CASCADE"), nullable=False)
+    chat_session_id: Mapped[int] = mapped_column(
+        BigInteger,
+        ForeignKey("chat_sessions.id", ondelete="CASCADE"),
+        nullable=False,
+        unique=True,
+    )
+    summary_md: Mapped[str] = mapped_column(Text, nullable=False)
+    memory_items_json: Mapped[list[Any]] = mapped_column(
+        JSONB, nullable=False, default=list, server_default="[]"
+    )
+    message_count_at_gen: Mapped[int] = mapped_column(BigInteger, nullable=False, server_default="0")
+    generated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )

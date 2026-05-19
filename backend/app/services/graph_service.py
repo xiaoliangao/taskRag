@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import logging
 from collections import defaultdict
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -146,7 +146,7 @@ async def rebuild_document_relations(db: AsyncSession, topic_id: int) -> dict[st
             deduped[key] = (w, ev)
     inserted_pairs = sorted(deduped.items(), key=lambda kv: kv[1][0], reverse=True)[:_MAX_EDGES]
 
-    now = datetime.now(tz=timezone.utc)
+    datetime.now(tz=UTC)
     for (a, b, rt), (w, ev) in inserted_pairs:
         db.add(
             DocumentRelation(

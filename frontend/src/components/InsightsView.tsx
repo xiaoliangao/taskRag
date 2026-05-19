@@ -1,7 +1,7 @@
 import { ReloadOutlined } from "@ant-design/icons";
 import { App, Button, Empty, Skeleton } from "antd";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import ReactMarkdown from "react-markdown";
+import MarkdownView from "./MarkdownView";
 
 import { apiErrorMessage } from "../api/client";
 import { generateGaps, listInsights } from "../api/intel";
@@ -109,7 +109,7 @@ export default function InsightsView({ topicId }: Props) {
               {it.summary && <div className="gap-card-summary">{it.summary}</div>}
               {it.detail_md && (
                 <div className="gap-card-detail">
-                  <ReactMarkdown>{it.detail_md}</ReactMarkdown>
+                  <MarkdownView>{it.detail_md}</MarkdownView>
                 </div>
               )}
               {it.suggested_questions.length > 0 && (

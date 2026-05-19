@@ -11,7 +11,7 @@ from __future__ import annotations
 import logging
 import re
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -82,7 +82,7 @@ def _parse_pub_date(work: dict) -> datetime | None:
     if not s:
         return None
     try:
-        return datetime.strptime(s, "%Y-%m-%d").replace(tzinfo=timezone.utc)
+        return datetime.strptime(s, "%Y-%m-%d").replace(tzinfo=UTC)
     except Exception:
         return None
 

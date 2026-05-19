@@ -123,11 +123,24 @@ async def generate_outline(
     db: SessionDep,
     current_user: CurrentUserDep,
 ) -> WritingProjectPublic:
+    """Queue outline generation. Returns immediately; client polls."""
     p = await get_project(db, project_id)
     if not p or p.topic_id != topic.id or p.user_id != current_user.id:
         raise NotFoundError("Writing project not found")
-    p = await WritingService(db).generate_outline(p)
+    p.status = "outline_pending"
+    p.error_message = None
+    await db.flush()
     await db.commit()
+    try:
+        from app.tasks.research_tasks import generate_writing_outline_task
+
+        generate_writing_outline_task.apply_async(
+            kwargs={"project_id": project_id},
+            queue="intelligence",
+        )
+    except Exception as exc:
+        import logging
+        logging.getLogger(__name__).warning("outline_dispatch_failed: %s", exc)
     return await _to_public(p, db)
 
 
@@ -141,11 +154,24 @@ async def generate_draft(
     db: SessionDep,
     current_user: CurrentUserDep,
 ) -> WritingProjectPublic:
+    """Queue draft generation. Returns immediately; client polls."""
     p = await get_project(db, project_id)
     if not p or p.topic_id != topic.id or p.user_id != current_user.id:
         raise NotFoundError("Writing project not found")
-    p = await WritingService(db).generate_draft(p)
+    p.status = "draft_pending"
+    p.error_message = None
+    await db.flush()
     await db.commit()
+    try:
+        from app.tasks.research_tasks import generate_writing_draft_task
+
+        generate_writing_draft_task.apply_async(
+            kwargs={"project_id": project_id},
+            queue="intelligence",
+        )
+    except Exception as exc:
+        import logging
+        logging.getLogger(__name__).warning("draft_dispatch_failed: %s", exc)
     return await _to_public(p, db)
 
 

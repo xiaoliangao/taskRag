@@ -1,8 +1,8 @@
 """Repositories for v1.3+ research extension tables (Trend Radar)."""
 from __future__ import annotations
 
-from datetime import datetime, timezone
-from typing import Iterable, Sequence
+from collections.abc import Iterable, Sequence
+from datetime import UTC, datetime
 
 from sqlalchemy import delete, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
@@ -18,7 +18,6 @@ from app.db.models.research_ext import (
     TopicTrendItem,
     TopicTrendRun,
 )
-
 
 # --- Sync repositories (Celery tasks) ---
 
@@ -43,7 +42,7 @@ class TopicTermRepository:
         if existing is not None:
             if term_type and term_type != "keyword":
                 existing.term_type = term_type
-            existing.updated_at = datetime.now(tz=timezone.utc)
+            existing.updated_at = datetime.now(tz=UTC)
             return existing
         row = TopicTerm(
             topic_id=topic_id,
@@ -124,7 +123,7 @@ class TopicTrendRepository:
             window_days=window_days,
             bucket=bucket,
             status="running",
-            started_at=datetime.now(tz=timezone.utc),
+            started_at=datetime.now(tz=UTC),
         )
         self.db.add(run)
         self.db.flush()
@@ -136,7 +135,7 @@ class TopicTrendRepository:
         summary_md: str | None,
         heatmap_json: dict,
     ) -> None:
-        now = datetime.now(tz=timezone.utc)
+        now = datetime.now(tz=UTC)
         run.status = "success"
         run.summary_md = summary_md
         run.heatmap_json = heatmap_json or {}
@@ -147,7 +146,7 @@ class TopicTrendRepository:
     def fail_run(self, run: TopicTrendRun, error: str) -> None:
         run.status = "failed"
         run.error_message = error[:2000]
-        run.finished_at = datetime.now(tz=timezone.utc)
+        run.finished_at = datetime.now(tz=UTC)
         self.db.flush()
 
     def add_items(self, items: Iterable[dict]) -> int:
@@ -267,7 +266,7 @@ class ClaimRelationRepository:
             existing.confidence = confidence
             existing.reason_md = reason_md
             existing.evidence_json = evidence_json
-            existing.updated_at = datetime.now(tz=timezone.utc)
+            existing.updated_at = datetime.now(tz=UTC)
             return
         self.db.add(
             ClaimRelation(
@@ -315,7 +314,7 @@ class DocumentSignalRepository:
             existing.reason_md = reason_md
             existing.evidence_json = evidence_json
             existing.source = source
-            existing.detected_at = datetime.now(tz=timezone.utc)
+            existing.detected_at = datetime.now(tz=UTC)
             return
         self.db.add(
             DocumentSignal(

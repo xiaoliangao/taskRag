@@ -1,10 +1,10 @@
 """Repositories for v1.1+ intelligence tables (sync + async helpers)."""
 from __future__ import annotations
 
-from datetime import datetime, timezone
-from typing import Sequence
+from collections.abc import Sequence
+from datetime import UTC, datetime
 
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Session
 
@@ -18,7 +18,6 @@ from app.db.models.intel import (
     TopicPulse,
     UserDocumentState,
 )
-
 
 # --- Briefing ---
 
@@ -62,7 +61,7 @@ class BriefingRepository:
         b.evidence_chunk_ids = data.get("evidence_chunk_ids") or []
         b.model_provider = model_provider
         b.model_name = model_name
-        b.generated_at = datetime.now(tz=timezone.utc)
+        b.generated_at = datetime.now(tz=UTC)
         b.error_msg = None
         self.db.flush()
         return b
@@ -109,7 +108,7 @@ class TopicInsightRepository:
         i.reading_priority = data.get("reading_priority")
         i.tags = data.get("tags") or []
         i.why_read = data.get("why_read")
-        i.generated_at = datetime.now(tz=timezone.utc)
+        i.generated_at = datetime.now(tz=UTC)
         self.db.flush()
         return i
 
@@ -209,7 +208,7 @@ class PulseRepository:
         p.citations_json = data.get("citations") or []
         p.model_provider = model_provider
         p.model_name = model_name
-        p.generated_at = datetime.now(tz=timezone.utc)
+        p.generated_at = datetime.now(tz=UTC)
         p.error_msg = None
         self.db.flush()
         return p
@@ -276,7 +275,7 @@ class ReadingPathRepository:
                 )
             )
         p.status = "success"
-        p.generated_at = datetime.now(tz=timezone.utc)
+        p.generated_at = datetime.now(tz=UTC)
         self.db.flush()
 
 

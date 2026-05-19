@@ -2,8 +2,9 @@ from __future__ import annotations
 
 import logging
 import uuid
+from collections.abc import Iterable, Sequence
 from functools import lru_cache
-from typing import Any, Iterable, Sequence
+from typing import Any
 
 from qdrant_client import QdrantClient
 from qdrant_client.http import models as rest
@@ -147,10 +148,23 @@ def remove_topic_id_from_documents(document_ids: Sequence[int], topic_id: int) -
 
 
 def search_for_topic(*, topic_id: int, query_vector: list[float], top_k: int) -> list[Any]:
+    return search_for_topics(topic_ids=[topic_id], query_vector=query_vector, top_k=top_k)
+
+
+def search_for_topics(
+    *, topic_ids: Sequence[int], query_vector: list[float], top_k: int
+) -> list[Any]:
+    """Cross-topic vector search. The caller MUST have already verified that
+    all topic_ids belong to the current user (see Cross-topic QA route).
+    """
     settings = get_settings()
     client = get_qdrant()
+    if not topic_ids:
+        return []
     flt = rest.Filter(
-        must=[rest.FieldCondition(key="topic_ids", match=rest.MatchAny(any=[topic_id]))]
+        must=[
+            rest.FieldCondition(key="topic_ids", match=rest.MatchAny(any=list(topic_ids)))
+        ]
     )
     response = client.query_points(
         collection_name=settings.qdrant_collection,

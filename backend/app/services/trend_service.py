@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import logging
 from collections import defaultdict
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from sqlalchemy.orm import Session
@@ -143,7 +143,7 @@ class TrendService:
         window_days: int,
         bucket: str,
     ) -> None:
-        now = datetime.now(tz=timezone.utc)
+        now = datetime.now(tz=UTC)
         recent_start = now - timedelta(days=window_days)
         baseline_start = recent_start - timedelta(days=window_days)
 
@@ -246,17 +246,17 @@ class TrendService:
         if not top:
             return {"buckets": [], "terms": [], "values": []}
 
-        now = datetime.now(tz=timezone.utc)
+        now = datetime.now(tz=UTC)
         start = now - timedelta(days=window_days)
         # Always use month buckets for readability. (bucket arg reserved for future.)
         bucket_keys: list[str] = []
-        cursor = datetime(start.year, start.month, 1, tzinfo=timezone.utc)
-        end = datetime(now.year, now.month, 1, tzinfo=timezone.utc)
+        cursor = datetime(start.year, start.month, 1, tzinfo=UTC)
+        end = datetime(now.year, now.month, 1, tzinfo=UTC)
         while cursor <= end:
             bucket_keys.append(cursor.strftime("%Y-%m"))
             year = cursor.year + (1 if cursor.month == 12 else 0)
             month = 1 if cursor.month == 12 else cursor.month + 1
-            cursor = datetime(year, month, 1, tzinfo=timezone.utc)
+            cursor = datetime(year, month, 1, tzinfo=UTC)
 
         term_ids = [d["term_id"] for d in top]
         labels = [d["term"] for d in top]

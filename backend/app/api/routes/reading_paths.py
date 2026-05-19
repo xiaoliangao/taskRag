@@ -3,15 +3,14 @@ from __future__ import annotations
 
 from fastapi import APIRouter
 from pydantic import BaseModel
+from sqlalchemy import select
 
 from app.api.deps import CurrentUserDep, OwnedTopicDep, SessionDep
-from app.core.errors import NotFoundError
 from app.db.models.document import Document
 from app.db.repositories.intel_repo import (
     ReadingPathAsyncRepository,
     UserDocStateAsyncRepository,
 )
-from sqlalchemy import select
 
 router = APIRouter()
 

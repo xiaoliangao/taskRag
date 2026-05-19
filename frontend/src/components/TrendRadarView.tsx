@@ -11,7 +11,7 @@ import {
 } from "antd";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import dayjs from "dayjs";
-import ReactMarkdown from "react-markdown";
+import MarkdownView from "./MarkdownView";
 import { useMemo, useState } from "react";
 
 import { apiErrorMessage } from "../api/client";
@@ -83,7 +83,7 @@ function Heatmap({
     <div
       style={{
         overflowX: "auto",
-        border: "1px solid var(--border, #e5e7eb)",
+        border: "1px solid var(--border-default)",
         borderRadius: 8,
         padding: 12,
       }}
@@ -102,7 +102,7 @@ function Heatmap({
               style={{
                 textAlign: "left",
                 padding: "4px 8px",
-                color: "var(--text-muted, #6b7280)",
+                color: "var(--text-secondary)",
                 fontWeight: 400,
               }}
             />
@@ -111,7 +111,7 @@ function Heatmap({
                 key={b}
                 style={{
                   padding: "4px 6px",
-                  color: "var(--text-muted, #6b7280)",
+                  color: "var(--text-secondary)",
                   fontWeight: 400,
                   textAlign: "center",
                   minWidth: 56,
@@ -129,7 +129,7 @@ function Heatmap({
                 style={{
                   textAlign: "left",
                   padding: "4px 8px",
-                  color: "var(--text-primary, #111827)",
+                  color: "var(--text-primary)",
                   fontWeight: 500,
                   whiteSpace: "nowrap",
                 }}
@@ -148,7 +148,7 @@ function Heatmap({
                     title={`${t} · ${buckets[i]} · ${v}`}
                     style={{
                       background: bg,
-                      color: v === 0 ? "var(--text-muted, #9ca3af)" : "#fff",
+                      color: v === 0 ? "var(--text-tertiary)" : "#fff",
                       textAlign: "center",
                       padding: "4px 0",
                       borderRadius: 4,
@@ -181,14 +181,14 @@ function TrendCard({
       data-testid={`trend-item-${item.id}`}
       style={{
         padding: 14,
-        border: "1px solid var(--border, #e5e7eb)",
+        border: "1px solid var(--border-default)",
         borderRadius: 10,
         cursor: "pointer",
         display: "flex",
         alignItems: "center",
         justifyContent: "space-between",
         gap: 12,
-        background: "var(--bg-card, #fff)",
+        background: "var(--bg-surface, var(--bg-elevated))",
         transition: "transform 0.08s ease",
       }}
       onMouseEnter={(e) => {
@@ -225,10 +225,10 @@ function TrendCard({
           </Tag>
           <Tag
             style={{
-              background: "var(--bg-muted, #f3f4f6)",
+              background: "var(--bg-elevated)",
               borderColor: "transparent",
               fontSize: 11,
-              color: "var(--text-muted, #6b7280)",
+              color: "var(--text-secondary)",
             }}
           >
             {TYPE_LABEL[item.term_type] ?? item.term_type}
@@ -237,7 +237,7 @@ function TrendCard({
         <div
           style={{
             fontSize: 12,
-            color: "var(--text-muted, #6b7280)",
+            color: "var(--text-secondary)",
           }}
         >
           {item.explanation ??
@@ -255,11 +255,11 @@ function TrendCard({
         }}
       >
         <div style={{ textAlign: "right" }}>
-          <div style={{ color: "var(--text-muted, #6b7280)" }}>近窗</div>
+          <div style={{ color: "var(--text-secondary)" }}>近窗</div>
           <div style={{ fontSize: 16, fontWeight: 500 }}>{item.frequency_recent}</div>
         </div>
         <div style={{ textAlign: "right" }}>
-          <div style={{ color: "var(--text-muted, #6b7280)" }}>增长</div>
+          <div style={{ color: "var(--text-secondary)" }}>增长</div>
           <div
             style={{
               fontSize: 16,
@@ -272,13 +272,13 @@ function TrendCard({
         </div>
         <Tooltip title={`置信度 ${(item.confidence * 100).toFixed(0)}%`}>
           <div style={{ textAlign: "right" }}>
-            <div style={{ color: "var(--text-muted, #6b7280)" }}>conf</div>
+            <div style={{ color: "var(--text-secondary)" }}>conf</div>
             <div style={{ fontSize: 16, fontWeight: 500 }}>
               {(item.confidence * 100).toFixed(0)}
             </div>
           </div>
         </Tooltip>
-        <RightOutlined style={{ color: "var(--text-muted, #9ca3af)" }} />
+        <RightOutlined style={{ color: "var(--text-tertiary)" }} />
       </div>
     </div>
   );
@@ -343,7 +343,7 @@ export default function TrendRadarView({ topicId, onJumpDocument }: Props) {
               fontSize: 11,
               letterSpacing: "0.08em",
               textTransform: "uppercase",
-              color: "var(--text-muted, #6b7280)",
+              color: "var(--text-secondary)",
               marginBottom: 4,
             }}
           >
@@ -351,7 +351,7 @@ export default function TrendRadarView({ topicId, onJumpDocument }: Props) {
             Research Radar · 近 {WINDOW_DAYS} 天
           </div>
           {run?.generated_at && (
-            <div style={{ fontSize: 12, color: "var(--text-muted, #6b7280)" }}>
+            <div style={{ fontSize: 12, color: "var(--text-secondary)" }}>
               更新于 {dayjs(run.generated_at).format("YYYY-MM-DD HH:mm")}
             </div>
           )}
@@ -370,11 +370,11 @@ export default function TrendRadarView({ topicId, onJumpDocument }: Props) {
       {!run && (
         <div
           style={{
-            border: "1px dashed var(--border, #e5e7eb)",
+            border: "1px dashed var(--border-default)",
             borderRadius: 10,
             padding: 28,
             textAlign: "center",
-            color: "var(--text-muted, #6b7280)",
+            color: "var(--text-secondary)",
           }}
         >
           还没有趋势快照。点击右上角"生成趋势"开始。
@@ -388,7 +388,7 @@ export default function TrendRadarView({ topicId, onJumpDocument }: Props) {
         <div
           style={{
             background: "rgba(249,115,22,0.08)",
-            color: "#c2410c",
+            color: "#fdba74",
             borderRadius: 8,
             padding: 12,
             marginBottom: 16,
@@ -403,14 +403,14 @@ export default function TrendRadarView({ topicId, onJumpDocument }: Props) {
         <div
           style={{
             padding: 16,
-            background: "var(--bg-muted, #f8fafc)",
+            background: "var(--bg-elevated)",
             borderRadius: 10,
             marginBottom: 16,
-            border: "1px solid var(--border, #e5e7eb)",
+            border: "1px solid var(--border-default)",
           }}
           data-testid="trend-summary"
         >
-          <ReactMarkdown>{run.summary_md}</ReactMarkdown>
+          <MarkdownView>{run.summary_md}</MarkdownView>
         </div>
       )}
 
@@ -465,7 +465,7 @@ export default function TrendRadarView({ topicId, onJumpDocument }: Props) {
             <div
               style={{
                 fontSize: 13,
-                color: "var(--text-muted, #6b7280)",
+                color: "var(--text-secondary)",
                 marginBottom: 16,
               }}
             >
@@ -485,7 +485,7 @@ export default function TrendRadarView({ topicId, onJumpDocument }: Props) {
                   onClick={() => onJumpDocument?.(d.document_id)}
                   style={{
                     padding: "10px 12px",
-                    border: "1px solid var(--border, #e5e7eb)",
+                    border: "1px solid var(--border-default)",
                     borderRadius: 8,
                     cursor: "pointer",
                   }}
@@ -496,7 +496,7 @@ export default function TrendRadarView({ topicId, onJumpDocument }: Props) {
                   <div
                     style={{
                       fontSize: 11,
-                      color: "var(--text-muted, #6b7280)",
+                      color: "var(--text-secondary)",
                       marginTop: 4,
                     }}
                   >

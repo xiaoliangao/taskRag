@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import logging
 import re
-from typing import Iterable
 
 from sqlalchemy.orm import Session
 
@@ -111,16 +110,36 @@ def _candidate_score(a: PaperClaim, b: PaperClaim) -> float:
     return score
 
 
+_MIN_SCORE_FALLBACK = 0.30
+
+
 def _build_candidates(claims: list[PaperClaim]) -> list[tuple[PaperClaim, PaperClaim, float]]:
+    """Pick claim pairs to send to the LLM relation judge.
+
+    v1.4 adaptive threshold: if the strict threshold (0.45) yields fewer than 5
+    candidates, fall back to 0.30 so cross-method comparisons in less-overlapping
+    topics still surface some pairs for human review.
+    """
     out: list[tuple[PaperClaim, PaperClaim, float]] = []
+    all_pairs: list[tuple[PaperClaim, PaperClaim, float]] = []
     n = len(claims)
     for i in range(n):
         a = claims[i]
         for j in range(i + 1, n):
             b = claims[j]
             score = _candidate_score(a, b)
+            if score <= 0:
+                continue
+            all_pairs.append((a, b, score))
             if score >= _MIN_SCORE:
                 out.append((a, b, score))
+
+    # Adaptive fallback: not enough strict candidates -> loosen threshold
+    if len(out) < 5:
+        loosened = [p for p in all_pairs if p[2] >= _MIN_SCORE_FALLBACK]
+        if len(loosened) > len(out):
+            out = loosened
+
     out.sort(key=lambda t: t[2], reverse=True)
     return out[:_MAX_PAIRS_PER_RUN]
 

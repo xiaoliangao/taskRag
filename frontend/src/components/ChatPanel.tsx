@@ -1,11 +1,15 @@
-import { ArrowUpOutlined, PlusOutlined, PushpinOutlined } from "@ant-design/icons";
-import { App, Button, Segmented } from "antd";
+import {
+  ArrowUpOutlined,
+  HistoryOutlined,
+  PlusOutlined,
+  PushpinOutlined,
+} from "@ant-design/icons";
+import { App, Button, Segmented, Tooltip } from "antd";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import dayjs from "dayjs";
 import { useEffect, useMemo, useRef, useState } from "react";
-import ReactMarkdown from "react-markdown";
-
 import { apiErrorMessage } from "../api/client";
+import MarkdownView from "./MarkdownView";
 import { pinChatMessage } from "../api/intel";
 import {
   createSession,
@@ -16,6 +20,7 @@ import {
 } from "../api/qa";
 import type { ChatMessage, ChatMode, Citation } from "../types/api";
 import { consumeStream } from "../utils/sse";
+import ChatMemoryDrawer from "./ChatMemoryDrawer";
 import CitationPanel from "./CitationPanel";
 
 const CHAT_MODE_OPTIONS = [
@@ -37,6 +42,7 @@ export default function ChatPanel({ topicId }: Props) {
   const [draft, setDraft] = useState("");
   const [streaming, setStreaming] = useState(false);
   const [streamBuffer, setStreamBuffer] = useState("");
+  const [memoryOpen, setMemoryOpen] = useState(false);
   const [streamCitations, setStreamCitations] = useState<Citation[]>([]);
   const abortRef = useRef<AbortController | null>(null);
   const scrollRef = useRef<HTMLDivElement | null>(null);
@@ -229,8 +235,10 @@ export default function ChatPanel({ topicId }: Props) {
           style={{
             padding: "0 12px",
             display: "flex",
-            justifyContent: "flex-start",
+            justifyContent: "space-between",
+            alignItems: "center",
             marginBottom: 4,
+            gap: 8,
           }}
         >
           <Segmented
@@ -241,6 +249,17 @@ export default function ChatPanel({ topicId }: Props) {
             disabled={!activeSessionId || streaming}
             data-testid="chat-mode-selector"
           />
+          <Tooltip title="查看长期记忆（自动总结的会话摘要）">
+            <Button
+              size="small"
+              type="text"
+              icon={<HistoryOutlined />}
+              onClick={() => setMemoryOpen(true)}
+              data-testid="chat-memory-btn"
+            >
+              记忆
+            </Button>
+          </Tooltip>
         </div>
         <div className="chat-input">
           <textarea
@@ -279,6 +298,12 @@ export default function ChatPanel({ topicId }: Props) {
           <CitationPanel items={lastAssistantCitations} />
         </div>
       </div>
+
+      <ChatMemoryDrawer
+        topicId={topicId}
+        open={memoryOpen}
+        onClose={() => setMemoryOpen(false)}
+      />
     </div>
   );
 }
@@ -326,10 +351,10 @@ function MessageBubble({
         {isUser ? (
           message.content
         ) : (
-          <div className="markdown-body">
-            <ReactMarkdown>{message.content || "正在思考…"}</ReactMarkdown>
+          <>
+            <MarkdownView>{message.content || "正在思考…"}</MarkdownView>
             {streaming && <span className="caret" />}
-          </div>
+          </>
         )}
         {canPin && (
           <div className="bubble-actions">

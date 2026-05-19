@@ -44,40 +44,75 @@ class LLMClient:
             log.warning("LLM client created without API key for provider=%s", cfg.provider)
         self._client = OpenAI(api_key=cfg.api_key or "missing", base_url=cfg.base_url)
 
-    def complete(self, messages: list[dict], *, temperature: float = 0.2, max_tokens: int = 1024) -> str:
-        try:
-            resp = self._client.chat.completions.create(
-                model=self.cfg.model,
-                messages=messages,
-                temperature=temperature,
-                max_tokens=max_tokens,
-                stream=False,
-            )
-        except Exception as exc:
-            raise UpstreamError(f"LLM call failed: {exc}") from exc
-        if not resp.choices:
-            raise UpstreamError("LLM returned no choices")
-        content = resp.choices[0].message.content or ""
-        return content.strip()
+    def complete(
+        self,
+        messages: list[dict],
+        *,
+        temperature: float = 0.2,
+        max_tokens: int = 1024,
+        feature: str = "generic",
+    ) -> str:
+        """Synchronous chat completion. Records to llm_usage_logs."""
+        from app.core.observability import track_llm_usage
 
-    def stream(self, messages: list[dict], *, temperature: float = 0.2, max_tokens: int = 1024) -> Iterator[str]:
-        try:
-            stream = self._client.chat.completions.create(
-                model=self.cfg.model,
-                messages=messages,
-                temperature=temperature,
-                max_tokens=max_tokens,
-                stream=True,
-            )
-        except Exception as exc:
-            raise UpstreamError(f"LLM stream failed: {exc}") from exc
-        for chunk in stream:
-            if not chunk.choices:
-                continue
-            delta = chunk.choices[0].delta
-            text = getattr(delta, "content", None)
-            if text:
-                yield text
+        with track_llm_usage(
+            feature=feature, provider=self.cfg.provider, model=self.cfg.model
+        ) as ctx:
+            try:
+                resp = self._client.chat.completions.create(
+                    model=self.cfg.model,
+                    messages=messages,
+                    temperature=temperature,
+                    max_tokens=max_tokens,
+                    stream=False,
+                )
+            except Exception as exc:
+                raise UpstreamError(f"LLM call failed: {exc}") from exc
+            if not resp.choices:
+                raise UpstreamError("LLM returned no choices")
+            usage = getattr(resp, "usage", None)
+            if usage is not None:
+                ctx["prompt_tokens"] = getattr(usage, "prompt_tokens", 0) or 0
+                ctx["completion_tokens"] = getattr(usage, "completion_tokens", 0) or 0
+            content = resp.choices[0].message.content or ""
+            return content.strip()
+
+    def stream(
+        self,
+        messages: list[dict],
+        *,
+        temperature: float = 0.2,
+        max_tokens: int = 1024,
+        feature: str = "chat_stream",
+    ) -> Iterator[str]:
+        """Streaming chat completion. Records to llm_usage_logs on completion."""
+        from app.core.observability import track_llm_usage
+
+        with track_llm_usage(
+            feature=feature, provider=self.cfg.provider, model=self.cfg.model
+        ) as ctx:
+            try:
+                stream = self._client.chat.completions.create(
+                    model=self.cfg.model,
+                    messages=messages,
+                    temperature=temperature,
+                    max_tokens=max_tokens,
+                    stream=True,
+                )
+            except Exception as exc:
+                raise UpstreamError(f"LLM stream failed: {exc}") from exc
+            char_count = 0
+            for chunk in stream:
+                if not chunk.choices:
+                    continue
+                delta = chunk.choices[0].delta
+                text = getattr(delta, "content", None)
+                if text:
+                    char_count += len(text)
+                    yield text
+            # Most streaming providers don't surface usage; rough estimate:
+            # ~4 chars/token. Real-world fine for prom histogram, off for cost.
+            ctx["completion_tokens"] = max(1, char_count // 4)
 
 
 @lru_cache

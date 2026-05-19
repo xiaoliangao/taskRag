@@ -1,7 +1,15 @@
 from __future__ import annotations
 
+import time
+
 from celery import Celery
 from celery.schedules import schedule
+from celery.signals import (
+    task_failure,
+    task_postrun,
+    task_prerun,
+    worker_process_init,
+)
 
 from app.core.config import get_settings
 from app.core.constants import (
@@ -12,6 +20,7 @@ from app.core.constants import (
 )
 
 _settings = get_settings()
+_task_start: dict[str, float] = {}
 
 celery_app = Celery(
     "taskrag",
@@ -52,6 +61,13 @@ celery_app.conf.update(
         "app.tasks.research_tasks.extract_topic_claims_task": {"queue": CELERY_QUEUE_INTELLIGENCE},
         "app.tasks.research_tasks.detect_topic_conflicts_task": {"queue": CELERY_QUEUE_INTELLIGENCE},
         "app.tasks.research_tasks.refresh_topic_signals_task": {"queue": CELERY_QUEUE_INTELLIGENCE},
+        # v1.4 Sprint 1: async-bridge tasks for hypothesis / comparison / writing
+        "app.tasks.research_tasks.verify_hypothesis_task": {"queue": CELERY_QUEUE_INTELLIGENCE},
+        "app.tasks.research_tasks.run_method_comparison_task": {"queue": CELERY_QUEUE_INTELLIGENCE},
+        "app.tasks.research_tasks.generate_writing_outline_task": {"queue": CELERY_QUEUE_INTELLIGENCE},
+        "app.tasks.research_tasks.generate_writing_draft_task": {"queue": CELERY_QUEUE_INTELLIGENCE},
+        "app.tasks.research_tasks.summarize_chat_session_task": {"queue": CELERY_QUEUE_INTELLIGENCE},
+        "app.tasks.research_tasks.rebuild_method_timeline_task": {"queue": CELERY_QUEUE_INTELLIGENCE},
     },
     beat_schedule={
         "scan-due-topics": {
@@ -66,3 +82,55 @@ celery_app.conf.update(
     },
     broker_connection_retry_on_startup=True,
 )
+
+
+# ---- Observability hooks (v1.4) ----
+
+
+@worker_process_init.connect
+def _init_observability_in_worker(**_: object) -> None:
+    """Each Celery worker process needs its own init (Sentry + Prometheus)."""
+    try:
+        from app.core.observability import init_observability
+
+        init_observability()
+    except Exception:  # pragma: no cover - observability must never crash workers
+        pass
+
+
+@task_prerun.connect
+def _task_prerun(task_id: str, task=None, **_: object) -> None:  # type: ignore[no-untyped-def]
+    _task_start[task_id] = time.monotonic()
+
+
+@task_postrun.connect
+def _task_postrun(task_id: str, task=None, state: str = "SUCCESS", **_: object) -> None:  # type: ignore[no-untyped-def]
+    started = _task_start.pop(task_id, None)
+    if task is None:
+        return
+    name = task.name
+    try:
+        from app.core.observability import (
+            intel_task_duration_seconds,
+            intel_task_total,
+        )
+
+        if intel_task_total is not None:
+            intel_task_total.labels(
+                task=name, status=str(state).lower()
+            ).inc()
+        if started is not None and intel_task_duration_seconds is not None:
+            intel_task_duration_seconds.labels(task=name).observe(time.monotonic() - started)
+    except Exception:  # pragma: no cover
+        pass
+
+
+@task_failure.connect
+def _task_failure(task_id: str, exception=None, **_: object) -> None:  # type: ignore[no-untyped-def]
+    try:
+        import sentry_sdk
+
+        if exception is not None:
+            sentry_sdk.capture_exception(exception)
+    except Exception:  # pragma: no cover
+        pass

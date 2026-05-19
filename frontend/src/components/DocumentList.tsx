@@ -1,10 +1,11 @@
-import { EyeInvisibleOutlined, EyeOutlined, SearchOutlined } from "@ant-design/icons";
-import { Empty, Input, Pagination, Skeleton, Tooltip } from "antd";
-import { useQuery } from "@tanstack/react-query";
+import { EyeInvisibleOutlined, EyeOutlined, SearchOutlined, UploadOutlined } from "@ant-design/icons";
+import { App, Empty, Input, Pagination, Skeleton, Tooltip, Upload } from "antd";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import dayjs from "dayjs";
 import { useMemo, useState } from "react";
 
-import { listDocuments } from "../api/documents";
+import { apiErrorMessage } from "../api/client";
+import { listDocuments, uploadDocumentPdf } from "../api/documents";
 import type { DocumentSummary } from "../types/api";
 import DocumentDetailDrawer from "./DocumentDetailDrawer";
 
@@ -24,6 +25,8 @@ const PRIORITY_LABEL: Record<string, string> = {
 };
 
 export default function DocumentList({ topicId }: Props) {
+  const qc = useQueryClient();
+  const { message } = App.useApp();
   const [page, setPage] = useState(1);
   const [q, setQ] = useState("");
   const [showLow, setShowLow] = useState(false);
@@ -33,6 +36,15 @@ export default function DocumentList({ topicId }: Props) {
     queryKey: ["documents", topicId, page, q],
     queryFn: () =>
       listDocuments(topicId, { page, page_size: 20, q: q || undefined }),
+  });
+
+  const uploadMut = useMutation({
+    mutationFn: (file: File) => uploadDocumentPdf(topicId, file),
+    onSuccess: (res) => {
+      message.success(`已入库 (${res.status})`);
+      qc.invalidateQueries({ queryKey: ["documents", topicId] });
+    },
+    onError: (e) => message.error(apiErrorMessage(e)),
   });
 
   const visibleItems = useMemo(() => {
@@ -100,6 +112,31 @@ export default function DocumentList({ topicId }: Props) {
             <span style={{ color: "var(--text-muted)" }}> · {data.total} total</span>
           </div>
         )}
+        <Upload
+          accept=".pdf,application/pdf"
+          showUploadList={false}
+          maxCount={1}
+          customRequest={({ file, onSuccess, onError }) => {
+            uploadMut.mutate(file as File, {
+              onSuccess: (r) => onSuccess?.(r),
+              onError: (e) => onError?.(e as Error),
+            });
+          }}
+        >
+          <Tooltip title="上传本地 PDF 入库（≤ 20 MB）">
+            <button
+              className="icon-btn"
+              style={{
+                color: uploadMut.isPending ? "var(--accent)" : "var(--text-tertiary)",
+                width: 28,
+                height: 28,
+              }}
+              data-testid="doc-upload-btn"
+            >
+              <UploadOutlined />
+            </button>
+          </Tooltip>
+        </Upload>
       </div>
 
       {isLoading ? (

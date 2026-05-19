@@ -2,9 +2,11 @@ from __future__ import annotations
 
 import json
 from collections.abc import AsyncIterator
+from datetime import datetime
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query, status
+from pydantic import BaseModel
 from sse_starlette.sse import EventSourceResponse
 
 from app.api.deps import CurrentUserDep, OwnedTopicDep, SessionDep, get_owned_chat_session
@@ -125,3 +127,72 @@ async def stream_message(
             }
 
     return EventSourceResponse(event_gen())
+
+
+# ---- v1.5: Conversation Memory list / delete ----
+
+
+class ChatSummaryPublic(BaseModel):
+    id: int
+    chat_session_id: int
+    summary_md: str
+    memory_items: list[dict] = []
+    message_count_at_gen: int
+    generated_at: datetime
+
+
+@router.get(
+    "/topics/{topic_id}/chat/memory",
+    response_model=list[ChatSummaryPublic],
+    tags=["memory"],
+)
+async def list_chat_memory(
+    topic: OwnedTopicDep,
+    db: SessionDep,
+    current_user: CurrentUserDep,
+    limit: int = Query(20, ge=1, le=100),
+) -> list[ChatSummaryPublic]:
+    from app.db.models.chat import ChatSessionSummary
+    from sqlalchemy import select
+
+    rows = (
+        await db.execute(
+            select(ChatSessionSummary)
+            .where(
+                ChatSessionSummary.user_id == current_user.id,
+                ChatSessionSummary.topic_id == topic.id,
+            )
+            .order_by(ChatSessionSummary.generated_at.desc())
+            .limit(limit)
+        )
+    ).scalars().all()
+    return [
+        ChatSummaryPublic(
+            id=r.id,
+            chat_session_id=r.chat_session_id,
+            summary_md=r.summary_md,
+            memory_items=list(r.memory_items_json or []),
+            message_count_at_gen=r.message_count_at_gen,
+            generated_at=r.generated_at,
+        )
+        for r in rows
+    ]
+
+
+@router.delete("/topics/{topic_id}/chat/memory/{summary_id}", tags=["memory"])
+async def delete_chat_memory(
+    summary_id: int,
+    topic: OwnedTopicDep,
+    db: SessionDep,
+    current_user: CurrentUserDep,
+) -> dict:
+    from app.db.models.chat import ChatSessionSummary
+
+    row = await db.get(ChatSessionSummary, summary_id)
+    if not row or row.user_id != current_user.id or row.topic_id != topic.id:
+        from app.core.errors import NotFoundError
+
+        raise NotFoundError("summary not found")
+    await db.delete(row)
+    await db.commit()
+    return {"deleted": True, "id": summary_id}

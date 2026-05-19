@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from app.core.constants import CollectionTrigger
 from app.db.models.topic import Topic, TopicSourceState
@@ -24,7 +24,7 @@ def _is_due(topic: Topic, state: TopicSourceState | None, now: datetime) -> bool
 @celery_app.task(name="app.tasks.schedule_tasks.enqueue_due_topic_sources_task")
 def enqueue_due_topic_sources_task() -> dict:
     Session = get_sync_sessionmaker()
-    now = datetime.now(tz=timezone.utc)
+    now = datetime.now(tz=UTC)
     enqueued: list[dict] = []
     with Session() as db:
         topics = db.query(Topic).filter(Topic.enabled.is_(True)).all()

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
-from typing import Sequence
+from collections.abc import Sequence
+from datetime import UTC, datetime
 
 from sqlalchemy import delete, func, select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
@@ -72,7 +72,7 @@ class TopicSourceStateRepository:
         )
 
     async def mark_failure(self, topic_id: int, source: str, error_msg: str) -> None:
-        now = datetime.now(tz=timezone.utc)
+        now = datetime.now(tz=UTC)
         await self.db.execute(
             update(TopicSourceState)
             .where(TopicSourceState.topic_id == topic_id, TopicSourceState.source == source)

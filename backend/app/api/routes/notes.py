@@ -6,7 +6,6 @@ from pydantic import BaseModel, Field
 
 from app.api.deps import CurrentUserDep, OwnedTopicDep, SessionDep
 from app.core.errors import NotFoundError
-from app.db.repositories.chat_repo import ChatRepository
 from app.db.repositories.intel_repo import NotesAsyncRepository
 
 router = APIRouter()
@@ -124,6 +123,7 @@ async def pin_chat_message(
 ) -> NotePublic:
     """Convert an assistant chat message into a pinned research note."""
     from sqlalchemy import select
+
     from app.db.models.chat import ChatMessage, ChatSession
 
     r = await db.execute(

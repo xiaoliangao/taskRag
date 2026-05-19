@@ -22,7 +22,7 @@ import {
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import dayjs from "dayjs";
 import { useMemo, useState } from "react";
-import ReactMarkdown from "react-markdown";
+import MarkdownView from "./MarkdownView";
 
 import { apiErrorMessage } from "../api/client";
 import {
@@ -100,6 +100,12 @@ function ComparisonView({ topicId }: { topicId: number }) {
     queryKey: ["comparison", topicId, activeId],
     queryFn: () => (activeId ? getComparison(topicId, activeId) : Promise.resolve(null)),
     enabled: !!activeId,
+    refetchInterval: (q) => {
+      const d = q.state.data;
+      if (!d) return 3_000;
+      if (d.status === "pending" || d.status === "running") return 3_000;
+      return false;
+    },
   });
 
   const createMut = useMutation({
@@ -110,8 +116,9 @@ function ComparisonView({ topicId }: { topicId: number }) {
       setDocIds([]);
       setActiveId(s.id);
       qc.invalidateQueries({ queryKey: ["comparisons", topicId] });
-      message.info("已创建，正在生成对比矩阵…");
+      message.info("已创建，对比矩阵将异步生成…");
       try {
+        // Fire-and-forget; the detail query will poll until status='success'.
         await generateComparison(topicId, s.id);
         qc.invalidateQueries({ queryKey: ["comparison", topicId, s.id] });
       } catch (e) {
@@ -123,8 +130,10 @@ function ComparisonView({ topicId }: { topicId: number }) {
 
   const regenMut = useMutation({
     mutationFn: () => generateComparison(topicId, activeId!),
-    onSuccess: () =>
-      qc.invalidateQueries({ queryKey: ["comparison", topicId, activeId] }),
+    onSuccess: () => {
+      message.info("已重新排队，请稍候…");
+      qc.invalidateQueries({ queryKey: ["comparison", topicId, activeId] });
+    },
     onError: (e) => message.error(apiErrorMessage(e)),
   });
 
@@ -159,14 +168,14 @@ function ComparisonView({ topicId }: { topicId: number }) {
               fontSize: 11,
               letterSpacing: "0.08em",
               textTransform: "uppercase",
-              color: "var(--text-muted)",
+              color: "var(--text-secondary)",
               marginBottom: 4,
             }}
           >
             <TableOutlined style={{ marginRight: 6 }} />
             Method Comparison
           </div>
-          <div style={{ fontSize: 12, color: "var(--text-muted)" }}>
+          <div style={{ fontSize: 12, color: "var(--text-secondary)" }}>
             选择 Topic 内 2-8 篇论文，生成对比矩阵。先用 briefing 填充，缺失字段用 LLM 补齐。
           </div>
         </div>
@@ -196,7 +205,7 @@ function ComparisonView({ topicId }: { topicId: number }) {
                   onClick={() => setActiveId(c.id)}
                   style={{
                     cursor: "pointer",
-                    background: activeId === c.id ? "var(--bg-muted)" : undefined,
+                    background: activeId === c.id ? "var(--bg-elevated)" : undefined,
                     borderRadius: 6,
                   }}
                 >
@@ -205,7 +214,7 @@ function ComparisonView({ topicId }: { topicId: number }) {
                       <div style={{ fontSize: 13, fontWeight: 500 }}>{c.title}</div>
                     }
                     description={
-                      <div style={{ fontSize: 11, color: "var(--text-muted)" }}>
+                      <div style={{ fontSize: 11, color: "var(--text-secondary)" }}>
                         {c.document_ids.length} 篇 · {c.status} ·{" "}
                         {dayjs(c.created_at).format("MM-DD HH:mm")}
                       </div>
@@ -236,6 +245,8 @@ function ComparisonView({ topicId }: { topicId: number }) {
       <Modal
         open={createOpen}
         onCancel={() => setCreateOpen(false)}
+        keyboard={false}
+        maskClosable={false}
         onOk={() => {
           if (docIds.length < 2) {
             message.warning("至少选择 2 篇");
@@ -328,12 +339,12 @@ function ComparisonDetail({
             }}
           >
             <thead>
-              <tr style={{ background: "var(--bg-muted)" }}>
+              <tr style={{ background: "var(--bg-elevated)" }}>
                 {cols.map((c) => (
                   <th
                     key={c}
                     style={{
-                      border: "1px solid var(--border, #e5e7eb)",
+                      border: "1px solid var(--border-default)",
                       padding: 8,
                       textAlign: "left",
                       whiteSpace: "nowrap",
@@ -351,7 +362,7 @@ function ComparisonDetail({
                     <td
                       key={c}
                       style={{
-                        border: "1px solid var(--border, #e5e7eb)",
+                        border: "1px solid var(--border-default)",
                         padding: 8,
                         verticalAlign: "top",
                         maxWidth: 220,
@@ -387,6 +398,19 @@ function WritingView({ topicId }: { topicId: number }) {
     queryKey: ["writing", topicId, activeId],
     queryFn: () => (activeId ? getWritingProject(topicId, activeId) : Promise.resolve(null)),
     enabled: !!activeId,
+    // Auto-poll while outline/draft are being generated by Celery.
+    refetchInterval: (q) => {
+      const d = q.state.data;
+      if (!d) return 3_000;
+      const transient = new Set([
+        "draft",
+        "outline_pending",
+        "draft_pending",
+        "running",
+      ]);
+      if (transient.has(d.status)) return 3_000;
+      return false;
+    },
   });
 
   const createMut = useMutation({
@@ -411,7 +435,7 @@ function WritingView({ topicId }: { topicId: number }) {
   const outlineMut = useMutation({
     mutationFn: () => generateOutline(topicId, activeId!),
     onSuccess: () => {
-      message.success("大纲已生成");
+      message.info("大纲已加入队列…");
       qc.invalidateQueries({ queryKey: ["writing", topicId, activeId] });
     },
     onError: (e) => message.error(apiErrorMessage(e)),
@@ -420,7 +444,7 @@ function WritingView({ topicId }: { topicId: number }) {
   const draftMut = useMutation({
     mutationFn: () => generateDraft(topicId, activeId!),
     onSuccess: () => {
-      message.success("草稿已生成");
+      message.info("草稿已加入队列，约 30-60 秒…");
       qc.invalidateQueries({ queryKey: ["writing", topicId, activeId] });
     },
     onError: (e) => message.error(apiErrorMessage(e)),
@@ -443,14 +467,14 @@ function WritingView({ topicId }: { topicId: number }) {
               fontSize: 11,
               letterSpacing: "0.08em",
               textTransform: "uppercase",
-              color: "var(--text-muted)",
+              color: "var(--text-secondary)",
               marginBottom: 4,
             }}
           >
             <EditOutlined style={{ marginRight: 6 }} />
             Related Work Studio
           </div>
-          <div style={{ fontSize: 12, color: "var(--text-muted)" }}>
+          <div style={{ fontSize: 12, color: "var(--text-secondary)" }}>
             输入研究问题 + 选择若干篇论文，生成带引用的 Related Work 草稿。
           </div>
         </div>
@@ -475,13 +499,13 @@ function WritingView({ topicId }: { topicId: number }) {
                   onClick={() => setActiveId(p.id)}
                   style={{
                     cursor: "pointer",
-                    background: activeId === p.id ? "var(--bg-muted)" : undefined,
+                    background: activeId === p.id ? "var(--bg-elevated)" : undefined,
                   }}
                 >
                   <List.Item.Meta
                     title={<div style={{ fontSize: 13 }}>{p.title}</div>}
                     description={
-                      <div style={{ fontSize: 11, color: "var(--text-muted)" }}>
+                      <div style={{ fontSize: 11, color: "var(--text-secondary)" }}>
                         {p.status} · {dayjs(p.updated_at).format("MM-DD HH:mm")}
                       </div>
                     }
@@ -511,6 +535,8 @@ function WritingView({ topicId }: { topicId: number }) {
       <Modal
         open={createOpen}
         onCancel={() => setCreateOpen(false)}
+        keyboard={false}
+        maskClosable={false}
         onOk={() => {
           if (!intent.trim()) {
             message.warning("请输入研究问题/方法描述");
@@ -600,7 +626,7 @@ function WritingDetail({
       {detail.error_message && (
         <div
           style={{
-            color: "#b91c1c",
+            color: "#fca5a5",
             background: "rgba(220,38,38,0.08)",
             padding: 8,
             borderRadius: 6,
@@ -617,7 +643,7 @@ function WritingDetail({
           {outlineSections.length > 0 && (
             <div
               style={{
-                background: "var(--bg-muted)",
+                background: "var(--bg-elevated)",
                 padding: 10,
                 borderRadius: 8,
                 marginBottom: 10,
@@ -630,7 +656,7 @@ function WritingDetail({
                   <div>{s.section_title}</div>
                   <ul style={{ margin: "4px 0 0 16px", padding: 0 }}>
                     {(s.paragraphs || []).map((p: any, j: number) => (
-                      <li key={j} style={{ color: "var(--text-muted)" }}>
+                      <li key={j} style={{ color: "var(--text-secondary)" }}>
                         {p.intent}
                         {p.document_ids?.length ? (
                           <span style={{ marginLeft: 4 }}>
@@ -648,13 +674,13 @@ function WritingDetail({
             <div
               style={{
                 padding: 12,
-                border: "1px solid var(--border, #e5e7eb)",
+                border: "1px solid var(--border-default)",
                 borderRadius: 8,
                 fontSize: 13,
                 lineHeight: 1.7,
               }}
             >
-              <ReactMarkdown>{detail.draft_md}</ReactMarkdown>
+              <MarkdownView>{detail.draft_md}</MarkdownView>
             </div>
           ) : (
             <Empty description="尚无草稿" />
@@ -672,12 +698,12 @@ function WritingDetail({
                   fontSize: 11,
                   padding: 6,
                   marginBottom: 4,
-                  border: "1px solid var(--border)",
+                  border: "1px solid var(--border-default)",
                   borderRadius: 6,
                 }}
               >
                 <div style={{ fontFamily: "var(--font-mono)" }}>{c.label}</div>
-                <div style={{ color: "var(--text-muted)" }} title={c.title}>
+                <div style={{ color: "var(--text-secondary)" }} title={c.title}>
                   {c.title}
                 </div>
               </div>

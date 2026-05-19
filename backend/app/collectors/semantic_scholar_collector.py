@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import logging
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 import httpx
@@ -104,7 +104,7 @@ class SemanticScholarCollector(BaseCollector):
         if not raw.published_at:
             return True
         if raw.published_at.tzinfo is None:
-            return raw.published_at.replace(tzinfo=timezone.utc) >= since
+            return raw.published_at.replace(tzinfo=UTC) >= since
         return raw.published_at >= since
 
     def _paper_to_raw(self, paper: dict, matched_keyword: str) -> RawDocument | None:
@@ -166,7 +166,7 @@ class SemanticScholarCollector(BaseCollector):
         s = str(value).strip()
         for fmt in ("%Y-%m-%d", "%Y-%m", "%Y"):
             try:
-                return datetime.strptime(s, fmt).replace(tzinfo=timezone.utc)
+                return datetime.strptime(s, fmt).replace(tzinfo=UTC)
             except ValueError:
                 continue
         return None

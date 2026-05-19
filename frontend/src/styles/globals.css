@@ -1316,6 +1316,12 @@ h5.ant-typography,
   line-height: 1.6;
   position: relative;
 }
+/* Assistant bubble: if markdown contains a table, expand to nearly full width
+   so the table is readable instead of squeezed. */
+.chat-bubble.assistant:has(.markdown-table-wrap) {
+  max-width: 100%;
+  align-self: stretch;
+}
 .chat-bubble.user {
   background: var(--accent);
   color: var(--text-inverse);
@@ -1345,6 +1351,127 @@ h5.ant-typography,
   padding-left: 20px;
 }
 .chat-bubble.assistant .markdown-body li { margin-bottom: 3px; }
+
+/* --- Shared markdown body styling (works on dark theme) --- */
+.markdown-body {
+  color: var(--text-primary);
+  font-size: 13.5px;
+  line-height: 1.65;
+}
+.markdown-body h1,
+.markdown-body h2,
+.markdown-body h3,
+.markdown-body h4 {
+  color: var(--text-primary);
+  font-weight: 600;
+  margin: 14px 0 6px;
+}
+.markdown-body h1 { font-size: 18px; }
+.markdown-body h2 { font-size: 16px; }
+.markdown-body h3 { font-size: 14px; }
+.markdown-body h4 { font-size: 13px; }
+.markdown-body p {
+  margin: 0 0 8px;
+  color: var(--text-primary);
+}
+.markdown-body strong {
+  color: var(--accent);
+  font-weight: 600;
+}
+.markdown-body em {
+  color: var(--text-secondary);
+}
+.markdown-body code {
+  font-family: var(--font-mono);
+  background: var(--bg-canvas, var(--bg-elevated));
+  padding: 1px 6px;
+  border-radius: 3px;
+  font-size: 12px;
+  border: 1px solid var(--border-subtle);
+  color: var(--text-primary);
+}
+.markdown-body pre {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+  padding: 10px 12px;
+  overflow-x: auto;
+  margin: 8px 0;
+}
+.markdown-body pre code {
+  background: transparent;
+  border: none;
+  padding: 0;
+}
+.markdown-body ul,
+.markdown-body ol {
+  margin: 6px 0 8px;
+  padding-left: 22px;
+}
+.markdown-body li {
+  margin-bottom: 3px;
+  color: var(--text-primary);
+}
+.markdown-body blockquote {
+  margin: 8px 0;
+  padding: 6px 12px;
+  border-left: 3px solid var(--accent-dim);
+  background: var(--accent-bg-soft);
+  color: var(--text-secondary);
+}
+.markdown-body a {
+  color: var(--accent);
+  text-decoration: none;
+  border-bottom: 1px dashed var(--accent-dim);
+}
+.markdown-body a:hover {
+  border-bottom-style: solid;
+}
+.markdown-body hr {
+  border: none;
+  border-top: 1px solid var(--border-subtle);
+  margin: 12px 0;
+}
+
+/* GFM table */
+.markdown-body .markdown-table-wrap {
+  overflow-x: auto;
+  margin: 10px 0;
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+}
+.markdown-body table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12.5px;
+  background: var(--bg-elevated);
+}
+.markdown-body th {
+  background: var(--bg-surface, var(--bg-elevated));
+  color: var(--text-primary);
+  font-weight: 600;
+  text-align: left;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border-default);
+  white-space: nowrap;
+}
+.markdown-body td {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border-subtle);
+  color: var(--text-primary);
+  vertical-align: top;
+}
+.markdown-body tr:last-child td {
+  border-bottom: none;
+}
+.markdown-body tr:hover td {
+  background: var(--accent-bg-soft);
+}
+/* GFM task list */
+.markdown-body input[type="checkbox"] {
+  margin-right: 6px;
+  accent-color: var(--accent);
+}
 
 /* Citation chip — for sidebar */
 .citation-chip {

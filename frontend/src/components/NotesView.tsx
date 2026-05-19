@@ -3,7 +3,7 @@ import { App, Button, Empty, Input, Modal, Skeleton } from "antd";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import dayjs from "dayjs";
 import { useState } from "react";
-import ReactMarkdown from "react-markdown";
+import MarkdownView from "./MarkdownView";
 
 import { apiErrorMessage } from "../api/client";
 import { createNote, deleteNote, listNotes, updateNote } from "../api/intel";
@@ -146,7 +146,7 @@ export default function NotesView({ topicId }: Props) {
               </div>
             </div>
             <div className="note-card-body">
-              <ReactMarkdown>{n.content_md}</ReactMarkdown>
+              <MarkdownView>{n.content_md}</MarkdownView>
             </div>
           </div>
         ))

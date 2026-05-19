@@ -6,7 +6,9 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit",
+    "test:e2e": "playwright test"
   },
   "dependencies": {
     "@ant-design/icons": "^5.3.7",
@@ -19,9 +21,11 @@
     "react-dom": "^18.3.1",
     "react-markdown": "^9.0.1",
     "react-router-dom": "^6.26.0",
+    "remark-gfm": "^4.0.1",
     "zustand": "^4.5.4"
   },
   "devDependencies": {
+    "@playwright/test": "^1.60.0",
     "@types/react": "^18.3.3",
     "@types/react-dom": "^18.3.0",
     "@vitejs/plugin-react": "^4.3.1",

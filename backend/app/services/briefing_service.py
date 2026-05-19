@@ -132,7 +132,7 @@ def _safe_json_loads(text: str) -> dict[str, Any] | None:
 
 def generate_document_briefing(db: Session, document_id: int, language: str = "zh-CN") -> DocumentBriefing:
     """Sync: load chunks, call LLM, save briefing."""
-    settings = get_settings()
+    get_settings()
     repo = BriefingRepository(db)
     b = repo.upsert_pending(document_id, language)
     b.status = "running"

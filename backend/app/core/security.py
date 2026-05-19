@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import secrets
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from jose import JWTError, jwt
@@ -25,7 +25,7 @@ def verify_password(plain: str, hashed: str) -> bool:
 
 
 def _now() -> datetime:
-    return datetime.now(tz=timezone.utc)
+    return datetime.now(tz=UTC)
 
 
 def create_access_token(user_id: int, extra: dict[str, Any] | None = None) -> tuple[str, int]:

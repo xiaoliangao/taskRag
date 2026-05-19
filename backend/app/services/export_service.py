@@ -2,8 +2,7 @@
 from __future__ import annotations
 
 import re
-from datetime import datetime, timezone
-from typing import Iterable
+from datetime import UTC, datetime
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -93,7 +92,7 @@ async def export_bibtex(db: AsyncSession, topic_id: int) -> str:
         return "% no documents in topic\n"
     out = [
         f"% TaskRAG export — topic {topic_id} — {len(docs)} entries — "
-        f"{datetime.now(tz=timezone.utc).isoformat()}\n"
+        f"{datetime.now(tz=UTC).isoformat()}\n"
     ]
     for doc, _ in docs:
         out.append(_bibtex_one(doc))
@@ -140,9 +139,9 @@ def _md_one(doc: Document, briefing: DocumentBriefing | None) -> str:
                 f"- {x}" for x in (briefing.limitations or [])[:5]
             ]
         if briefing.datasets:
-            lines += ["", f"## Datasets", _fmt_list(briefing.datasets, 6)]
+            lines += ["", "## Datasets", _fmt_list(briefing.datasets, 6)]
         if briefing.metrics:
-            lines += ["", f"## Metrics", _fmt_list(briefing.metrics, 6)]
+            lines += ["", "## Metrics", _fmt_list(briefing.metrics, 6)]
     elif doc.abstract:
         lines += ["", "## Abstract", doc.abstract]
     return "\n".join(lines) + "\n"
@@ -155,8 +154,8 @@ async def export_markdown_bundle(db: AsyncSession, topic_id: int) -> str:
         return "# (empty topic)\n"
     parts: list[str] = [
         f"# TaskRAG Export — Topic {topic_id}",
-        f"",
-        f"Generated: {datetime.now(tz=timezone.utc).isoformat()}",
+        "",
+        f"Generated: {datetime.now(tz=UTC).isoformat()}",
         f"Total documents: {len(docs)}",
         "",
         "---",

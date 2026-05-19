@@ -1,15 +1,13 @@
 """Claim & Conflict Explorer API (Sprint 2, v1.3)."""
 from __future__ import annotations
 
-from typing import Sequence
-
 from fastapi import APIRouter, Query
 from sqlalchemy import select
 
 from app.api.deps import OwnedTopicDep, SessionDep
 from app.core.errors import NotFoundError
 from app.db.models.document import Document
-from app.db.models.research_ext import ClaimRelation, PaperClaim
+from app.db.models.research_ext import PaperClaim
 from app.db.repositories.research_ext_repo import (
     ClaimRelationAsyncRepository,
     PaperClaimAsyncRepository,

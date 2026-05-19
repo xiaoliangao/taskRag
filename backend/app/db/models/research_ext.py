@@ -479,3 +479,61 @@ class TopicTrendItem(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
+
+
+# ---- v1.5 A-3: Method Timeline ----
+
+
+class MethodEntity(Base, TimestampMixin):
+    __tablename__ = "method_entities"
+    __table_args__ = (
+        UniqueConstraint("topic_id", "normalized_name", name="uq_method_entities_norm"),
+        Index("ix_method_entities_topic_seen", "topic_id", "first_seen_at"),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    topic_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("topics.id", ondelete="CASCADE"), nullable=False
+    )
+    name: Mapped[str] = mapped_column(Text, nullable=False)
+    normalized_name: Mapped[str] = mapped_column(Text, nullable=False)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    first_seen_document_id: Mapped[int | None] = mapped_column(
+        BigInteger, ForeignKey("documents.id", ondelete="SET NULL"), nullable=True
+    )
+    first_seen_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    document_count: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    aliases_json: Mapped[list[Any]] = mapped_column(
+        JSONB, nullable=False, default=list, server_default="[]"
+    )
+
+
+class MethodEvolutionEdge(Base):
+    __tablename__ = "method_evolution_edges"
+    __table_args__ = (
+        UniqueConstraint(
+            "topic_id", "from_method_id", "to_method_id", "relation_type",
+            name="uq_method_evolution_pair",
+        ),
+        Index("ix_method_evolution_topic", "topic_id"),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    topic_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("topics.id", ondelete="CASCADE"), nullable=False
+    )
+    from_method_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("method_entities.id", ondelete="CASCADE"), nullable=False
+    )
+    to_method_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("method_entities.id", ondelete="CASCADE"), nullable=False
+    )
+    relation_type: Mapped[str] = mapped_column(Text, nullable=False)
+    evidence_document_ids: Mapped[list[Any]] = mapped_column(
+        JSONB, nullable=False, default=list, server_default="[]"
+    )
+    confidence: Mapped[float] = mapped_column(Float, nullable=False, server_default="0")
+    explanation: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )

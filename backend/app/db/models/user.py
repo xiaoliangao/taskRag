@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import BigInteger, DateTime, ForeignKey, String, Text, func
+from sqlalchemy import BigInteger, DateTime, ForeignKey, Text, func
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -18,7 +18,7 @@ class User(Base, TimestampMixin):
     password_hash: Mapped[str] = mapped_column(Text, nullable=False)
     settings_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict, server_default="{}")
 
-    refresh_tokens: Mapped[list["RefreshToken"]] = relationship(back_populates="user", cascade="all, delete-orphan")
+    refresh_tokens: Mapped[list[RefreshToken]] = relationship(back_populates="user", cascade="all, delete-orphan")
 
 
 class RefreshToken(Base):

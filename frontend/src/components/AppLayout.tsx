@@ -1,6 +1,7 @@
 import {
   AppstoreOutlined,
   BellOutlined,
+  ClusterOutlined,
   LogoutOutlined,
   PlusOutlined,
   SettingOutlined,
@@ -50,6 +51,7 @@ export default function AppLayout() {
   };
 
   const isTopicListActive = location.pathname === "/topics" || location.pathname === "/";
+  const isCrossTopicActive = location.pathname.startsWith("/qa/cross-topic");
   const isNotificationsActive = location.pathname.startsWith("/notifications");
   const isSettingsActive = location.pathname.startsWith("/settings");
   const activeTopicId = (() => {
@@ -94,6 +96,13 @@ export default function AppLayout() {
             <AppstoreOutlined />
             <span>所有课题</span>
             <span className="count">{topics?.length ?? 0}</span>
+          </div>
+          <div
+            className={`nav-item ${isCrossTopicActive ? "active" : ""}`}
+            onClick={() => navigate("/qa/cross-topic")}
+          >
+            <ClusterOutlined />
+            <span>跨课题问答</span>
           </div>
           <div
             className={`nav-item ${isNotificationsActive ? "active" : ""}`}

@@ -2,7 +2,7 @@ import { ReloadOutlined } from "@ant-design/icons";
 import { App, Button, Empty, Skeleton } from "antd";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import dayjs from "dayjs";
-import ReactMarkdown from "react-markdown";
+import MarkdownView from "./MarkdownView";
 
 import { generatePulse, getLatestPulse } from "../api/intel";
 import { apiErrorMessage } from "../api/client";
@@ -92,7 +92,7 @@ export default function PulseCard({ topicId, onJumpDocument }: Props) {
           <>
             {data.summary_md && (
               <div className="pulse-summary">
-                <ReactMarkdown>{data.summary_md}</ReactMarkdown>
+                <MarkdownView>{data.summary_md}</MarkdownView>
               </div>
             )}
 

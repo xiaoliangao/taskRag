@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import func
 from sqlalchemy.orm import Session
@@ -26,7 +26,7 @@ class SignalService:
 
     def refresh_for_topic(self, topic_id: int, max_docs: int = 80) -> dict[str, int]:
         # Pull recent documents + insight relevance + favorite state.
-        now = datetime.now(tz=timezone.utc)
+        now = datetime.now(tz=UTC)
         recent_cutoff = now - timedelta(days=180)
 
         rows = (

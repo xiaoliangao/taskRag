@@ -134,11 +134,27 @@ async def generate_comparison(
     db: SessionDep,
     current_user: CurrentUserDep,
 ) -> ComparisonSessionPublic:
+    """Queue a generate task (async). Returns immediately with status='pending'.
+    Client polls GET /comparisons/{id} until status='success' or 'failed'.
+    """
     s = await get_session(db, comparison_id)
     if not s or s.topic_id != topic.id or s.user_id != current_user.id:
         raise NotFoundError("Comparison not found")
-    s = await ComparisonService(db).generate(s)
+    # Mark as pending so UI can show progress while Celery picks it up.
+    s.status = "pending"
+    s.error_message = None
+    await db.flush()
     await db.commit()
+    try:
+        from app.tasks.research_tasks import run_method_comparison_task
+
+        run_method_comparison_task.apply_async(
+            kwargs={"session_id": comparison_id},
+            queue="intelligence",
+        )
+    except Exception as exc:
+        import logging
+        logging.getLogger(__name__).warning("comparison_dispatch_failed: %s", exc)
     return await _to_public(s, db)
 
 

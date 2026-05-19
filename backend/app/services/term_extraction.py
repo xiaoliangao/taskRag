@@ -2,8 +2,8 @@
 from __future__ import annotations
 
 import re
+from collections.abc import Iterable
 from dataclasses import dataclass
-from typing import Iterable
 
 _PATTERNS = [
     # CamelCase / hyphenated tech names: RAFT-Stereo, DINO-v2, RAFT_Stereo

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 import re
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 import arxiv
@@ -38,7 +38,7 @@ class ArxivCollector(BaseCollector):
             )
             try:
                 for r in self._client.results(search):
-                    if r.published and r.published.replace(tzinfo=timezone.utc) < since:
+                    if r.published and r.published.replace(tzinfo=UTC) < since:
                         break
                     out.append(self._to_raw(r, matched_keyword=kw))
             except arxiv.HTTPError as exc:
@@ -65,14 +65,14 @@ class ArxivCollector(BaseCollector):
         return f'(ti:"{kw}" OR abs:"{kw}")'
 
     @staticmethod
-    def _to_raw(r: "arxiv.Result", matched_keyword: str) -> RawDocument:
+    def _to_raw(r: arxiv.Result, matched_keyword: str) -> RawDocument:
         external_id = ArxivCollector._normalize_id(r.get_short_id() or r.entry_id)
         return RawDocument(
             source=SourceType.ARXIV.value,
             external_id=external_id,
             title=(r.title or "").strip().replace("\n", " "),
             authors=[a.name for a in (r.authors or [])],
-            published_at=r.published.replace(tzinfo=timezone.utc) if r.published and r.published.tzinfo is None else r.published,
+            published_at=r.published.replace(tzinfo=UTC) if r.published and r.published.tzinfo is None else r.published,
             url=r.entry_id,
             abstract=(r.summary or "").strip(),
             raw_content_url=r.pdf_url,

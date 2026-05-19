@@ -1,0 +1,119 @@
+name: CI
+
+on:
+  push:
+    branches: [main, dev]
+  pull_request:
+    branches: [main, dev]
+
+jobs:
+  backend:
+    name: Backend (lint + test)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: taskrag
+          POSTGRES_PASSWORD: taskrag
+          POSTGRES_DB: taskrag
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      redis:
+        image: redis:7-alpine
+        ports: ["6379:6379"]
+
+    defaults:
+      run:
+        working-directory: backend
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: backend/pyproject.toml
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+
+      - name: Ruff
+        run: ruff check app/
+
+      - name: MyPy (non-blocking)
+        run: mypy --ignore-missing-imports app/ || true
+
+      - name: Alembic upgrade smoke
+        env:
+          APP_ENV: development
+          DATABASE_URL: postgresql+asyncpg://taskrag:taskrag@localhost:5432/taskrag
+          SYNC_DATABASE_URL: postgresql+psycopg://taskrag:taskrag@localhost:5432/taskrag
+          REDIS_URL: redis://localhost:6379/0
+          QDRANT_URL: http://localhost:6333
+          JWT_SECRET_KEY: ci-test-secret-key-min-32-chars-long
+        run: alembic upgrade head
+
+      - name: Pytest
+        env:
+          APP_ENV: development
+          DATABASE_URL: postgresql+asyncpg://taskrag:taskrag@localhost:5432/taskrag
+          SYNC_DATABASE_URL: postgresql+psycopg://taskrag:taskrag@localhost:5432/taskrag
+          REDIS_URL: redis://localhost:6379/0
+          QDRANT_URL: http://localhost:6333
+          JWT_SECRET_KEY: ci-test-secret-key-min-32-chars-long
+        run: pytest -q
+
+  frontend:
+    name: Frontend (typecheck + build)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: TypeScript check
+        run: npx tsc --noEmit
+
+      - name: Vite build
+        run: npm run build
+
+  e2e:
+    name: Playwright E2E (optional, requires live API)
+    runs-on: ubuntu-latest
+    if: ${{ vars.E2E_BASE_URL != '' }}
+    needs: [backend, frontend]
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - name: Run Playwright
+        env:
+          E2E_BASE_URL: ${{ vars.E2E_BASE_URL }}
+          E2E_DEMO_EMAIL: ${{ secrets.E2E_DEMO_EMAIL }}
+          E2E_DEMO_PASSWORD: ${{ secrets.E2E_DEMO_PASSWORD }}
+        run: npm run test:e2e

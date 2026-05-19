@@ -2,6 +2,7 @@ import { createBrowserRouter, Navigate } from "react-router-dom";
 
 import AppLayout from "./components/AppLayout";
 import RequireAuth from "./components/RequireAuth";
+import CrossTopicChatPage from "./pages/CrossTopicChatPage";
 import LoginPage from "./pages/LoginPage";
 import NotificationsPage from "./pages/NotificationsPage";
 import RegisterPage from "./pages/RegisterPage";
@@ -24,6 +25,7 @@ export const router = createBrowserRouter([
       { path: "topics", element: <TopicListPage /> },
       { path: "topics/:topicId", element: <TopicDetailPage /> },
       { path: "topics/:topicId/:tab", element: <TopicDetailPage /> },
+      { path: "qa/cross-topic", element: <CrossTopicChatPage /> },
       { path: "notifications", element: <NotificationsPage /> },
       { path: "settings", element: <SettingsPage /> },
     ],

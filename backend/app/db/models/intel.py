@@ -21,7 +21,6 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base, TimestampMixin
 
-
 # --- Sprint 1: Briefing / Insight / User state ---
 
 class DocumentBriefing(Base, TimestampMixin):

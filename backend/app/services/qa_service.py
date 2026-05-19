@@ -1,9 +1,9 @@
 from __future__ import annotations
 
+import asyncio
 import logging
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Sequence
 from dataclasses import dataclass
-from typing import Sequence
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -44,7 +44,80 @@ async def _gather_context(
     topic_id: int,
     question: str,
 ) -> tuple[list[Citation], list[dict]]:
-    citations = await retrieve_for_topic(db=db, topic_id=topic_id, query=question)
+    """Multi-query retrieval (v1.4 Sprint 6).
+
+    Asks the LLM for 1+2 alternate phrasings of the question, runs each through
+    the hybrid retriever, then takes the union by chunk_id with the best score
+    across all variants. Falls back to the single-query path on any failure.
+    """
+    variants = [question]
+    try:
+        from app.services.query_rewrite import generate_variants
+
+        variants = generate_variants(question, n=2)
+    except Exception as exc:
+        log.warning("query_rewrite_skipped: %s", exc)
+
+    # Run all variants in parallel (each does BM25+vector+rerank internally).
+    all_runs = await asyncio.gather(
+        *[
+            retrieve_for_topic(db=db, topic_id=topic_id, query=q, dedup_by_document=True)
+            for q in variants
+        ],
+        return_exceptions=True,
+    )
+
+    best: dict[int, Citation] = {}
+    for run in all_runs:
+        if isinstance(run, Exception) or not run:
+            continue
+        for c in run:
+            key = c.chunk_id or -hash(c.text)
+            prev = best.get(key)
+            if prev is None or c.score > prev.score:
+                best[key] = c
+
+    # Multi-query union may surface multiple chunks per document. Dedup again
+    # by document_id, keeping the highest-scoring chunk per doc.
+    by_doc: dict[int, Citation] = {}
+    for c in sorted(best.values(), key=lambda c: c.score, reverse=True):
+        if c.document_id not in by_doc:
+            by_doc[c.document_id] = c
+
+    citations = sorted(by_doc.values(), key=lambda c: c.score, reverse=True)
+
+    settings = get_settings()
+
+    # v1.5 B-1: CRAG reflection — if grader says "low/medium" relevance, retry
+    # once with an LLM-rewritten query and merge.
+    if settings.crag_enabled:
+        try:
+            from app.services.crag import reflective_retrieve
+
+            citations, audit = await reflective_retrieve(
+                db=db, topic_id=topic_id, question=question, initial=citations
+            )
+            if audit.get("rewrote"):
+                log.info(
+                    "crag_retry verdict=%s confidence=%.2f rewritten=%s",
+                    audit.get("verdict"),
+                    audit.get("confidence"),
+                    audit.get("rewritten_query"),
+                )
+        except Exception as exc:
+            log.warning("crag_skipped: %s", exc)
+
+    # v1.5 B-2: GraphRAG — pull 1-hop neighbors of top documents via document_relations.
+    if settings.graphrag_enabled:
+        try:
+            from app.services.graphrag import expand_with_neighbors
+
+            citations = await expand_with_neighbors(
+                db=db, topic_id=topic_id, citations=citations
+            )
+        except Exception as exc:
+            log.warning("graphrag_skipped: %s", exc)
+
     citation_dicts = [c.to_dict(drop_text=False) for c in citations]
     return citations, citation_dicts
 
@@ -64,6 +137,34 @@ async def _gather_pinned_notes(db: AsyncSession, user_id: int, topic_id: int, li
         ]
     except Exception:
         return []
+
+
+async def _gather_user_research_context(
+    db: AsyncSession, user_id: int, topic_id: int, k: int = 3
+) -> str:
+    """Inject recent chat-session summaries (v1.4 Sprint 7 Conversation Memory)."""
+    try:
+        from app.services.memory_service import (
+            build_memory_block,
+            list_session_summaries,
+        )
+
+        summaries = await list_session_summaries(db, user_id=user_id, topic_id=topic_id, limit=k)
+        return build_memory_block(summaries)
+    except Exception:  # pragma: no cover - memory must never break QA
+        return ""
+
+
+def _maybe_dispatch_summary(db: AsyncSession, session_id: int) -> None:
+    """Fire-and-forget Celery summarization. Cheap; runs only when threshold hit."""
+    try:
+        from app.tasks.research_tasks import summarize_chat_session_task
+
+        summarize_chat_session_task.apply_async(
+            kwargs={"session_id": session_id}, queue="intelligence"
+        )
+    except Exception:  # pragma: no cover - dispatch best-effort
+        pass
 
 
 async def answer_nonstream(
@@ -95,12 +196,14 @@ async def answer_nonstream(
         return QAResult(message_id=assistant_msg.id, content=NO_CONTEXT_FALLBACK, citations=[])
 
     pinned = await _gather_pinned_notes(db, user.id, chat.topic_id)
+    user_ctx = await _gather_user_research_context(db, user.id, chat.topic_id)
     messages = build_messages(
         question=question,
         chat_history=history,
         citations=citation_dicts,
         pinned_notes=pinned,
         chat_mode=getattr(chat, "mode", None),
+        user_research_context=user_ctx,
     )
     llm = _llm_for_user(user)
     content = llm.complete(messages)
@@ -113,6 +216,7 @@ async def answer_nonstream(
         citations=public_citations,
     )
     await db.commit()
+    _maybe_dispatch_summary(db, chat.id)
     return QAResult(message_id=assistant_msg.id, content=content, citations=public_citations)
 
 
@@ -150,12 +254,14 @@ async def answer_stream(
         return
 
     pinned = await _gather_pinned_notes(db, user.id, chat.topic_id)
+    user_ctx = await _gather_user_research_context(db, user.id, chat.topic_id)
     messages = build_messages(
         question=question,
         chat_history=history,
         citations=citation_dicts,
         pinned_notes=pinned,
         chat_mode=getattr(chat, "mode", None),
+        user_research_context=user_ctx,
     )
     llm = _llm_for_user(user)
 
@@ -179,4 +285,5 @@ async def answer_stream(
         citations=public_citations,
     )
     await db.commit()
+    _maybe_dispatch_summary(db, chat.id)
     yield {"event": "done", "data": {"message_id": assistant_msg.id}}

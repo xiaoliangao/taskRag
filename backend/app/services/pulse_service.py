@@ -5,7 +5,7 @@ import json
 import logging
 import re
 from collections import Counter
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import desc
 from sqlalchemy.orm import Session
@@ -49,8 +49,8 @@ _PULSE_SYSTEM = """你是一个研究助手。基于当前课题最近一段时�
 
 
 def _today_utc_date() -> datetime:
-    now = datetime.now(tz=timezone.utc)
-    return datetime(now.year, now.month, now.day, tzinfo=timezone.utc)
+    now = datetime.now(tz=UTC)
+    return datetime(now.year, now.month, now.day, tzinfo=UTC)
 
 
 def _safe_json(text: str) -> dict | None:
@@ -87,8 +87,8 @@ def generate_topic_pulse(db: Session, topic_id: int, *, force: bool = False) -> 
     db.flush()
 
     # Gather corpus for the last 24h (or last 7d if no new in 24h)
-    cutoff_24h = datetime.now(tz=timezone.utc) - timedelta(hours=24)
-    cutoff_7d = datetime.now(tz=timezone.utc) - timedelta(days=7)
+    cutoff_24h = datetime.now(tz=UTC) - timedelta(hours=24)
+    cutoff_7d = datetime.now(tz=UTC) - timedelta(days=7)
 
     recent_q = (
         db.query(TopicDocument, Document)

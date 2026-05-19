@@ -7,7 +7,7 @@ import {
 import { App, Button, Empty, Skeleton, Segmented, Tag, Typography } from "antd";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
-import ReactMarkdown from "react-markdown";
+import MarkdownView from "./MarkdownView";
 
 import { apiErrorMessage } from "../api/client";
 import {
@@ -58,10 +58,10 @@ function ClaimBlock({
   return (
     <div
       style={{
-        border: "1px solid var(--border, #e5e7eb)",
+        border: "1px solid var(--border-default)",
         borderRadius: 8,
         padding: "10px 12px",
-        background: "var(--bg-card, #fff)",
+        background: "var(--bg-surface, var(--bg-elevated))",
         flex: 1,
         minWidth: 0,
       }}
@@ -75,7 +75,7 @@ function ClaimBlock({
           marginBottom: 6,
         }}
       >
-        <Tag style={{ background: "var(--bg-muted, #f3f4f6)", border: "none" }}>
+        <Tag style={{ background: "var(--bg-elevated)", border: "none" }}>
           Claim {letter}
         </Tag>
         <a
@@ -86,7 +86,7 @@ function ClaimBlock({
           href="#"
           style={{
             fontSize: 12,
-            color: "var(--text-muted, #6b7280)",
+            color: "var(--text-secondary)",
             textOverflow: "ellipsis",
             whiteSpace: "nowrap",
             overflow: "hidden",
@@ -101,7 +101,7 @@ function ClaimBlock({
         {claim.claim_text}
       </div>
       <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
-        <Tag style={{ background: "rgba(59,130,246,0.08)", border: "none", color: "#1d4ed8" }}>
+        <Tag style={{ background: "rgba(59,130,246,0.08)", border: "none", color: "#93c5fd" }}>
           {claim.claim_type}
         </Tag>
         {claim.dataset && <Tag style={{ border: "none" }}>{claim.dataset}</Tag>}
@@ -113,9 +113,9 @@ function ClaimBlock({
           style={{
             marginTop: 8,
             fontSize: 12,
-            color: "var(--text-muted, #6b7280)",
+            color: "var(--text-secondary)",
             fontStyle: "italic",
-            background: "var(--bg-muted, #f8fafc)",
+            background: "var(--bg-elevated)",
             padding: "6px 8px",
             borderRadius: 6,
           }}
@@ -146,7 +146,7 @@ function ConflictCard({
         border: `1px solid ${tone.color}33`,
         borderRadius: 12,
         padding: 14,
-        background: "var(--bg-card, #fff)",
+        background: "var(--bg-surface, var(--bg-elevated))",
       }}
     >
       <div
@@ -161,7 +161,7 @@ function ConflictCard({
         <Tag style={{ background: `${tone.color}1a`, color: tone.color, border: "none", fontWeight: 500 }}>
           {tone.label}
         </Tag>
-        <span style={{ fontSize: 12, color: "var(--text-muted, #6b7280)" }}>
+        <span style={{ fontSize: 12, color: "var(--text-secondary)" }}>
           置信度 {(rel.confidence * 100).toFixed(0)}%
         </span>
         {rel.reviewed_by_user && (
@@ -186,15 +186,15 @@ function ConflictCard({
       {rel.reason_md && (
         <div
           style={{
-            background: "var(--bg-muted, #f8fafc)",
+            background: "var(--bg-elevated)",
             padding: "10px 12px",
             borderRadius: 8,
             fontSize: 13,
-            color: "var(--text-primary, #111827)",
+            color: "var(--text-primary)",
             marginBottom: 10,
           }}
         >
-          <ReactMarkdown>{rel.reason_md}</ReactMarkdown>
+          <MarkdownView>{rel.reason_md}</MarkdownView>
         </div>
       )}
 
@@ -285,9 +285,9 @@ function SignalsPanel({
               key={s.id}
               style={{
                 padding: 12,
-                border: "1px solid var(--border, #e5e7eb)",
+                border: "1px solid var(--border-default)",
                 borderRadius: 10,
-                background: "var(--bg-card, #fff)",
+                background: "var(--bg-surface, var(--bg-elevated))",
               }}
             >
               <div
@@ -317,7 +317,7 @@ function SignalsPanel({
                           ? "rgba(220,38,38,0.10)"
                           : "rgba(59,130,246,0.08)",
                       color:
-                        s.signal_type === "breakthrough_candidate" ? "#b91c1c" : "#1d4ed8",
+                        s.signal_type === "breakthrough_candidate" ? "#fca5a5" : "#93c5fd",
                       border: "none",
                     }}
                   >
@@ -328,7 +328,7 @@ function SignalsPanel({
                   </span>
                 </div>
               </div>
-              <div style={{ fontSize: 12, color: "var(--text-muted, #6b7280)" }}>
+              <div style={{ fontSize: 12, color: "var(--text-secondary)" }}>
                 {s.reason_md}
               </div>
             </div>
@@ -394,13 +394,13 @@ export default function ConflictExplorerView({ topicId, onJumpDocument }: Props)
               fontSize: 11,
               letterSpacing: "0.08em",
               textTransform: "uppercase",
-              color: "var(--text-muted, #6b7280)",
+              color: "var(--text-secondary)",
             }}
           >
             <AlertOutlined style={{ marginRight: 6 }} />
             Claim Conflict Explorer
           </div>
-          <div style={{ fontSize: 12, color: "var(--text-muted, #6b7280)", marginTop: 4 }}>
+          <div style={{ fontSize: 12, color: "var(--text-secondary)", marginTop: 4 }}>
             UI 中所有"冲突"均为疑似信号，需要人工确认。
           </div>
         </div>
@@ -452,7 +452,7 @@ export default function ConflictExplorerView({ topicId, onJumpDocument }: Props)
         <Typography.Title level={5} style={{ margin: 0 }}>
           突破候选 / 高相关信号
         </Typography.Title>
-        <div style={{ fontSize: 12, color: "var(--text-muted, #6b7280)", marginBottom: 10 }}>
+        <div style={{ fontSize: 12, color: "var(--text-secondary)", marginBottom: 10 }}>
           基于近期度 + 收藏 + 趋势词重叠的本地信号（外部引用数据不可用时降级）。
         </div>
         <SignalsPanel topicId={topicId} onJump={onJumpDocument} />

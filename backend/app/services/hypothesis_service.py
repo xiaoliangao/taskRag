@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import logging
 from collections import Counter
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -117,7 +117,7 @@ class HypothesisService:
         except Exception as exc:
             check.status = "failed"
             check.error_message = f"retrieval_failed: {exc}"[:1000]
-            check.finished_at = datetime.now(tz=timezone.utc)
+            check.finished_at = datetime.now(tz=UTC)
             await self.db.flush()
             return check
 
@@ -125,12 +125,12 @@ class HypothesisService:
             check.status = "success"
             check.verdict = "insufficient"
             check.result_md = (
-                f"**Verdict**: insufficient\n\n"
-                f"当前 Topic 中未检索到与该假设相关的证据。\n"
+                "**Verdict**: insufficient\n\n"
+                "当前 Topic 中未检索到与该假设相关的证据。\n"
             )
             check.confidence = 0.1
             check.result_json = {"verdict": "insufficient", "evidence_count": 0}
-            check.finished_at = datetime.now(tz=timezone.utc)
+            check.finished_at = datetime.now(tz=UTC)
             await self.db.flush()
             return check
 
@@ -215,7 +215,7 @@ class HypothesisService:
             "evidence_count": len(evidence_rows),
             "stance_breakdown": dict(Counter(stances)),
         }
-        check.finished_at = datetime.now(tz=timezone.utc)
+        check.finished_at = datetime.now(tz=UTC)
         await self.db.flush()
         return check
 

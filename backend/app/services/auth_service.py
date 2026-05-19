@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -15,7 +15,6 @@ from app.core.security import (
 from app.db.models.user import User
 from app.db.repositories.user_repo import RefreshTokenRepository, UserRepository
 from app.schemas.auth import TokenPair, UserPublic
-
 
 DEFAULT_USER_SETTINGS = {
     "timezone": "Asia/Singapore",
@@ -56,7 +55,7 @@ class AuthService:
         rt = await self.tokens.get_active(token_hash)
         if not rt:
             raise UnauthorizedError("Invalid refresh token")
-        if rt.expires_at.replace(tzinfo=timezone.utc) < datetime.now(tz=timezone.utc):
+        if rt.expires_at.replace(tzinfo=UTC) < datetime.now(tz=UTC):
             raise UnauthorizedError("Refresh token expired")
         # Rotate
         await self.tokens.revoke(token_hash)

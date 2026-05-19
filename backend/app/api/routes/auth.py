@@ -1,8 +1,9 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Response, status
+from fastapi import APIRouter, Request, Response, status
 
 from app.api.deps import CurrentUserDep, SessionDep
+from app.core.config import get_settings
 from app.schemas.auth import (
     LoginRequest,
     LogoutRequest,
@@ -16,15 +17,35 @@ from app.services.auth_service import AuthService
 
 router = APIRouter()
 
+# slowapi limiter is optional — wrap with try/except so route still imports if dep missing
+try:
+    from slowapi import Limiter
+    from slowapi.util import get_remote_address
+
+    _limiter = Limiter(key_func=get_remote_address)
+    _settings = get_settings()
+    register_limit = _limiter.limit(_settings.rate_limit_register)
+    login_limit = _limiter.limit(_settings.rate_limit_login)
+except ImportError:  # pragma: no cover
+    def _noop(*_a, **_kw):
+        def _decorator(fn):
+            return fn
+        return _decorator
+
+    register_limit = _noop()
+    login_limit = _noop()
+
 
 @router.post("/register", response_model=UserPublic, status_code=status.HTTP_201_CREATED)
-async def register(body: RegisterRequest, db: SessionDep) -> UserPublic:
+@register_limit
+async def register(request: Request, body: RegisterRequest, db: SessionDep) -> UserPublic:
     user = await AuthService(db).register(body.email, body.password)
     return UserPublic.model_validate(user)
 
 
 @router.post("/login", response_model=TokenPair)
-async def login(body: LoginRequest, db: SessionDep) -> TokenPair:
+@login_limit
+async def login(request: Request, body: LoginRequest, db: SessionDep) -> TokenPair:
     return await AuthService(db).login(body.email, body.password)
 
 

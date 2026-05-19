@@ -114,3 +114,24 @@ try:
     api_router.include_router(exports.router, tags=["exports"])
 except ImportError:
     pass
+
+try:
+    from app.api.routes import qa_cross  # noqa: F401
+
+    api_router.include_router(qa_cross.router, tags=["qa-cross"])
+except ImportError:
+    pass
+
+try:
+    from app.api.routes import methods  # noqa: F401
+
+    api_router.include_router(methods.router, tags=["methods"])
+except ImportError:
+    pass
+
+try:
+    from app.api.routes import agent  # noqa: F401
+
+    api_router.include_router(agent.router, tags=["agent"])
+except ImportError:
+    pass

@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import logging
 from functools import lru_cache
-from typing import Iterable
 
 import httpx
 from tenacity import retry, stop_after_attempt, wait_exponential

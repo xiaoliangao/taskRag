@@ -2,8 +2,8 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
-from typing import Sequence
+from collections.abc import Sequence
+from datetime import UTC, datetime
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -191,7 +191,7 @@ class ComparisonService:
         session.result_json = result_json
         session.result_md = result_md
         session.status = "success"
-        session.finished_at = datetime.now(tz=timezone.utc)
+        session.finished_at = datetime.now(tz=UTC)
         await self.db.flush()
         return session
 
@@ -210,7 +210,7 @@ class ComparisonService:
             "strengths": _fmt_list(briefing.contributions, 2),
             "limitations": _fmt_list(briefing.limitations, 2),
             "code": (
-                f"Yes" if briefing.code_available else ("N/A" if briefing.code_available is None else "No")
+                "Yes" if briefing.code_available else ("N/A" if briefing.code_available is None else "No")
             ) + (f" ({briefing.code_url})" if briefing.code_url else ""),
         }
 

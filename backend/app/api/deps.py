@@ -5,7 +5,7 @@ from typing import Annotated
 from fastapi import Depends, Header
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.errors import ForbiddenError, NotFoundError, UnauthorizedError
+from app.core.errors import NotFoundError, UnauthorizedError
 from app.core.security import decode_access_token
 from app.db.models.chat import ChatSession
 from app.db.models.topic import Topic
@@ -14,7 +14,6 @@ from app.db.repositories.chat_repo import ChatRepository
 from app.db.repositories.topic_repo import TopicRepository
 from app.db.repositories.user_repo import UserRepository
 from app.db.session import get_db
-
 
 SessionDep = Annotated[AsyncSession, Depends(get_db)]
 

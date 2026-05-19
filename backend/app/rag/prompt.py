@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Sequence
+from collections.abc import Sequence
 
 from app.rag.chat_modes import mode_hint
 
@@ -38,6 +38,7 @@ def build_messages(
     citations: Sequence[dict],
     pinned_notes: Sequence[dict] = (),
     chat_mode: str | None = None,
+    user_research_context: str = "",
 ) -> list[dict]:
     history_text = ""
     for m in chat_history:
@@ -54,6 +55,7 @@ def build_messages(
     user_block = (
         f"CHAT_HISTORY:\n{history_text or '(无)'}\n\n"
         + (f"USER_NOTES (用户已 Pin 的研究笔记，可在回答中引用并标明 '来自用户笔记'):\n{notes_block}\n\n" if notes_block else "")
+        + (f"USER_RESEARCH_CONTEXT (历史会话总结 + 长期记忆):\n{user_research_context}\n\n" if user_research_context else "")
         + f"CONTEXT:\n{build_context_block(citations)}\n\n"
         f"USER_QUESTION:\n{question}\n\n"
         "请基于 CONTEXT 给出结构化回答，结尾给出引用列表。"

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from app.collectors.base import CollectorRateLimitedError, dedupe_raw_docs
 from app.collectors.registry import get_collector, get_fallback_sources
@@ -55,7 +55,7 @@ def _search_with_fallback(
 
 
 def _resolve_since(topic: Topic, source: str, trigger: str, source_state: TopicSourceState | None) -> datetime:
-    now = datetime.now(tz=timezone.utc)
+    now = datetime.now(tz=UTC)
     if trigger == CollectionTrigger.BACKFILL.value:
         return now - timedelta(days=get_settings().backfill_days)
     if source_state and source_state.last_success_at:
@@ -97,7 +97,7 @@ def collect_topic_source_task(
             db.flush()
 
         task_row.status = TaskStatus.RUNNING.value
-        task_row.started_at = datetime.now(tz=timezone.utc)
+        task_row.started_at = datetime.now(tz=UTC)
         db.commit()
 
         state = (
@@ -189,7 +189,7 @@ def collect_topic_source_task(
             _set_progress("done", total=total, processed=total,
                           new=new_count, reused=reused_count, skipped=skipped_count)
 
-            now = datetime.now(tz=timezone.utc)
+            now = datetime.now(tz=UTC)
             state.last_fetched_at = now
             state.last_success_at = now
             state.last_error_at = None
@@ -247,7 +247,7 @@ def collect_topic_source_task(
         except CollectorRateLimitedError as exc:
             db.rollback()
             log.warning("All sources rate-limited for topic=%s source=%s: %s", topic_id, source, exc)
-            now = datetime.now(tz=timezone.utc)
+            now = datetime.now(tz=UTC)
             state.last_fetched_at = now
             state.last_error_at = now
             state.last_error_msg = f"rate limited: {exc.detail}"[:1000]
@@ -277,7 +277,7 @@ def collect_topic_source_task(
         except Exception as exc:
             db.rollback()
             log.exception("collect_topic_source_task failed: %s", exc)
-            now = datetime.now(tz=timezone.utc)
+            now = datetime.now(tz=UTC)
             state.last_fetched_at = now
             state.last_error_at = now
             state.last_error_msg = str(exc)[:1000]
@@ -321,7 +321,7 @@ def ingest_picked_documents_task(
             db.commit()
 
         task_row.status = TaskStatus.RUNNING.value
-        task_row.started_at = datetime.now(tz=timezone.utc)
+        task_row.started_at = datetime.now(tz=UTC)
         db.commit()
 
         total = len(picks)
@@ -381,7 +381,7 @@ def ingest_picked_documents_task(
                 skipped=skipped_count,
             )
 
-        now = datetime.now(tz=timezone.utc)
+        now = datetime.now(tz=UTC)
         task_row.status = TaskStatus.SUCCESS.value
         task_row.finished_at = now
         task_row.new_docs_count = new_count

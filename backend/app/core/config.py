@@ -4,7 +4,6 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Literal
 
-from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -96,9 +95,44 @@ class Settings(BaseSettings):
     upload_max_bytes: int = 20 * 1024 * 1024
     fulltext_max_bytes: int = 200 * 1024
 
+    # v1.4 — security
+    cors_extra_origins: str = ""  # comma-separated
+    rate_limit_login: str = "10/minute"
+    rate_limit_register: str = "5/minute"
+    rate_limit_llm_trigger: str = "30/minute"
+    rate_limit_default: str = "120/minute"
+
+    # v1.5 — retrieval feature flags
+    crag_enabled: bool = True
+    graphrag_enabled: bool = True
+
     def ensure_storage_dirs(self) -> None:
         for path in (self.pdf_storage_dir, self.fulltext_storage_dir, self.upload_storage_dir):
             path.mkdir(parents=True, exist_ok=True)
+
+    def assert_production_secrets(self) -> None:
+        """Fail fast if running with insecure defaults in non-dev envs."""
+        if self.app_env.lower() in {"production", "prod", "staging"}:
+            secret = (self.jwt_secret_key or "").strip().lower()
+            if not secret or secret.startswith("change-me"):
+                raise RuntimeError(
+                    "JWT_SECRET_KEY must be set to a strong value in production "
+                    "(current value looks like default placeholder)."
+                )
+            if self.jwt_secret_key and len(self.jwt_secret_key) < 32:
+                raise RuntimeError("JWT_SECRET_KEY must be at least 32 characters in production.")
+
+    def cors_origins(self) -> list[str]:
+        base = [self.frontend_base_url, "http://localhost:5173"]
+        extra = [o.strip() for o in (self.cors_extra_origins or "").split(",") if o.strip()]
+        # dedupe preserving order
+        seen: set[str] = set()
+        out: list[str] = []
+        for o in base + extra:
+            if o and o not in seen:
+                seen.add(o)
+                out.append(o)
+        return out
 
 
 @lru_cache

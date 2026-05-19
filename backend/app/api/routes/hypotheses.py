@@ -70,6 +70,11 @@ async def create_and_run_hypothesis_check(
     db: SessionDep,
     current_user: CurrentUserDep,
 ) -> HypothesisCheckPublic:
+    """Create a HypothesisCheck row and dispatch verification to Celery.
+
+    Returns the check immediately with status='pending'. Client polls via
+    GET /hypotheses/{id} until status becomes 'success' or 'failed'.
+    """
     if not body.hypothesis.strip():
         raise NotFoundError("hypothesis is required")
     service = HypothesisService(db)
@@ -79,8 +84,17 @@ async def create_and_run_hypothesis_check(
         hypothesis=body.hypothesis,
     )
     await db.commit()
-    await service.run(check)
-    await db.commit()
+    try:
+        from app.tasks.research_tasks import verify_hypothesis_task
+
+        verify_hypothesis_task.apply_async(
+            kwargs={"check_id": check.id},
+            queue="intelligence",
+        )
+    except Exception as exc:  # pragma: no cover - dispatch should rarely fail
+        # Don't fail the request — caller will see pending status and can retry
+        import logging
+        logging.getLogger(__name__).warning("hypothesis_dispatch_failed: %s", exc)
     return await _to_public(check, db)
 
 

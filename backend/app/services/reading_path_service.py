@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import logging
 import re
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from sqlalchemy.orm import Session
@@ -100,7 +100,7 @@ def generate_reading_path(db: Session, topic_id: int, *, max_items: int = 20) ->
         ).all()
     }
 
-    now = datetime.now(tz=timezone.utc)
+    now = datetime.now(tz=UTC)
     scored: list[tuple[float, Document, DocumentBriefing | None, TopicDocumentInsight | None]] = []
     for _td, doc in rows:
         b = briefings.get(doc.id)

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
-from typing import Sequence
+from collections.abc import Sequence
+from datetime import UTC, datetime
 
 from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -61,12 +61,12 @@ class NotificationRepository:
         if not n or n.user_id != user_id:
             return None
         if n.read_at is None:
-            n.read_at = datetime.now(tz=timezone.utc)
+            n.read_at = datetime.now(tz=UTC)
             await self.db.flush()
         return n
 
     async def mark_all_read(self, user_id: int) -> int:
-        now = datetime.now(tz=timezone.utc)
+        now = datetime.now(tz=UTC)
         result = await self.db.execute(
             update(Notification)
             .where(Notification.user_id == user_id, Notification.read_at.is_(None))

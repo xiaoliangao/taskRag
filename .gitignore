@@ -41,6 +41,12 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 
+# ---- Playwright ----
+test-results/
+playwright-report/
+**/test-results/
+**/playwright-report/
+
 # ---- IDE ----
 .vscode/
 .idea/
@@ -71,6 +77,7 @@ _pre_delete_backup*.json
 *.docx.bak
 *.pdf.bak
 e2e-*.png
+fix-*.png
 after-delete.png
 radar-*.png
 conflict-*.png

@@ -1,7 +1,7 @@
 """Trend Radar API (Sprint 1, v1.3)."""
 from __future__ import annotations
 
-from typing import Sequence
+from collections.abc import Sequence
 
 from fastapi import APIRouter, Query
 from sqlalchemy import select

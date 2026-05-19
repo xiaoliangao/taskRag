@@ -6,7 +6,7 @@ collectors before deciding which ones to ingest.
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -61,7 +61,7 @@ async def search_preview(
     sources = [s for s in sources if s in topic_sources]
     if not sources:
         sources = topic_sources
-    since = datetime.now(tz=timezone.utc) - timedelta(days=settings.backfill_days)
+    since = datetime.now(tz=UTC) - timedelta(days=settings.backfill_days)
 
     all_docs: list[RawDocument] = []
     rate_limited: list[str] = []

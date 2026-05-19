@@ -2,8 +2,8 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
-from typing import Sequence
+from collections.abc import Sequence
+from datetime import UTC, datetime
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -148,7 +148,7 @@ async def generate_glossary_for_topic(
             existing.definition = definition
             existing.representative_document_ids = doc_ids
             existing.confidence = confidence
-            existing.updated_at = datetime.now(tz=timezone.utc)
+            existing.updated_at = datetime.now(tz=UTC)
         generated += 1
     await db.flush()
     return {"generated": generated, "skipped": skipped}

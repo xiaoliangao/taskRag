@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
-from typing import Sequence
+from collections.abc import Sequence
+from datetime import UTC, datetime
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -39,7 +39,7 @@ class CollectionTaskRepository:
 
     async def mark_running(self, task: CollectionTask) -> None:
         task.status = TaskStatus.RUNNING.value
-        task.started_at = datetime.now(tz=timezone.utc)
+        task.started_at = datetime.now(tz=UTC)
         await self.db.flush()
 
     async def mark_success(
@@ -51,7 +51,7 @@ class CollectionTaskRepository:
         skipped_docs: int,
     ) -> None:
         task.status = TaskStatus.SUCCESS.value
-        task.finished_at = datetime.now(tz=timezone.utc)
+        task.finished_at = datetime.now(tz=UTC)
         task.new_docs_count = new_docs
         task.reused_docs_count = reused_docs
         task.skipped_docs_count = skipped_docs
@@ -59,7 +59,7 @@ class CollectionTaskRepository:
 
     async def mark_failed(self, task: CollectionTask, error_msg: str) -> None:
         task.status = TaskStatus.FAILED.value
-        task.finished_at = datetime.now(tz=timezone.utc)
+        task.finished_at = datetime.now(tz=UTC)
         task.error_msg = error_msg[:2000]
         await self.db.flush()
 

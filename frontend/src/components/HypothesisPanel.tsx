@@ -20,7 +20,7 @@ import {
 } from "antd";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import dayjs from "dayjs";
-import ReactMarkdown from "react-markdown";
+import MarkdownView from "./MarkdownView";
 import { useState } from "react";
 
 import { apiErrorMessage } from "../api/client";
@@ -85,7 +85,7 @@ function EvidenceItem({
           href="#"
           style={{
             fontSize: 12,
-            color: "var(--text-muted)",
+            color: "var(--text-secondary)",
             maxWidth: 240,
             overflow: "hidden",
             textOverflow: "ellipsis",
@@ -97,12 +97,12 @@ function EvidenceItem({
         </a>
       </div>
       {e.quote && (
-        <div style={{ fontSize: 13, fontStyle: "italic", color: "#374151", marginBottom: 4 }}>
+        <div style={{ fontSize: 13, fontStyle: "italic", color: "var(--text-secondary)", marginBottom: 4 }}>
           “{e.quote}”
         </div>
       )}
       {e.explanation && (
-        <div style={{ fontSize: 12, color: "var(--text-muted)" }}>{e.explanation}</div>
+        <div style={{ fontSize: 12, color: "var(--text-secondary)" }}>{e.explanation}</div>
       )}
     </div>
   );
@@ -135,7 +135,7 @@ function CheckDetail({
         <span style={{ color: verdict.color, fontSize: 18 }}>{verdict.icon}</span>
         <div style={{ flex: 1 }}>
           <div style={{ fontSize: 14, fontWeight: 500 }}>{verdict.label}</div>
-          <div style={{ fontSize: 12, color: "var(--text-muted)" }}>
+          <div style={{ fontSize: 12, color: "var(--text-secondary)" }}>
             置信度 {(check.confidence * 100).toFixed(0)}% · 证据 {check.evidence.length} 条
           </div>
         </div>
@@ -144,14 +144,14 @@ function CheckDetail({
       {check.result_md && (
         <div
           style={{
-            background: "var(--bg-muted)",
+            background: "var(--bg-elevated)",
             padding: 12,
             borderRadius: 8,
             marginBottom: 16,
             fontSize: 13,
           }}
         >
-          <ReactMarkdown>{check.result_md}</ReactMarkdown>
+          <MarkdownView>{check.result_md}</MarkdownView>
         </div>
       )}
 
@@ -210,6 +210,13 @@ export default function HypothesisPanel({ topicId, onJumpDocument }: Props) {
     queryKey: ["hypothesis", topicId, activeId],
     queryFn: () => (activeId ? getHypothesis(topicId, activeId) : Promise.resolve(null)),
     enabled: !!activeId,
+    // Auto-poll while the check is still being processed by Celery.
+    refetchInterval: (q) => {
+      const d = q.state.data;
+      if (!d) return 3_000;
+      if (d.status === "pending" || d.status === "running") return 3_000;
+      return false;
+    },
   });
 
   const runMut = useMutation({
@@ -217,7 +224,7 @@ export default function HypothesisPanel({ topicId, onJumpDocument }: Props) {
     onSuccess: (data) => {
       setActiveId(data.id);
       setHypothesis("");
-      message.success("已生成验证结果");
+      message.info("已加入队列，正在跟 LLM 沟通…");
       qc.invalidateQueries({ queryKey: ["hypotheses", topicId] });
     },
     onError: (e) => message.error(apiErrorMessage(e)),
@@ -242,14 +249,14 @@ export default function HypothesisPanel({ topicId, onJumpDocument }: Props) {
             fontSize: 11,
             letterSpacing: "0.08em",
             textTransform: "uppercase",
-            color: "var(--text-muted)",
+            color: "var(--text-secondary)",
             marginBottom: 6,
           }}
         >
           <ExperimentOutlined style={{ marginRight: 6 }} />
           Hypothesis Verification
         </div>
-        <div style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 8 }}>
+        <div style={{ fontSize: 12, color: "var(--text-secondary)", marginBottom: 8 }}>
           输入一个研究假设，系统在 Topic 内检索证据并给出 支持 / 反对 / 限定条件 三栏。
         </div>
         <Input.TextArea
@@ -290,7 +297,7 @@ export default function HypothesisPanel({ topicId, onJumpDocument }: Props) {
                   onClick={() => setActiveId(h.id)}
                   style={{
                     cursor: "pointer",
-                    background: activeId === h.id ? "var(--bg-muted)" : undefined,
+                    background: activeId === h.id ? "var(--bg-elevated)" : undefined,
                     borderRadius: 6,
                     padding: "8px 10px",
                   }}
@@ -314,7 +321,7 @@ export default function HypothesisPanel({ topicId, onJumpDocument }: Props) {
                       </div>
                     }
                     description={
-                      <div style={{ fontSize: 11, color: "var(--text-muted)" }}>
+                      <div style={{ fontSize: 11, color: "var(--text-secondary)" }}>
                         <Tag
                           color={
                             (VERDICT_LABEL[h.verdict ?? "insufficient"] ?? VERDICT_LABEL.insufficient)

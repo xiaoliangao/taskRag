@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta, timezone
 
 from app.rag.prompt import NO_CONTEXT_FALLBACK, build_context_block, build_messages
 from app.rag.retriever import _freshness
@@ -21,7 +21,7 @@ def test_build_messages_contains_question_and_citations():
 
 
 def test_freshness_decay_monotonic():
-    now = datetime(2026, 5, 15, tzinfo=timezone.utc)
+    now = datetime(2026, 5, 15, tzinfo=UTC)
     recent = _freshness(now - timedelta(days=1), now)
     older = _freshness(now - timedelta(days=365), now)
     older2 = _freshness(now - timedelta(days=730), now)
