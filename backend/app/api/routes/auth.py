@@ -9,11 +9,14 @@ from app.schemas.auth import (
     LogoutRequest,
     RefreshRequest,
     RegisterRequest,
+    SendCodeRequest,
+    SendCodeResponse,
     TokenPair,
     UserMe,
     UserPublic,
 )
 from app.services.auth_service import AuthService
+from app.services.verification_code_service import generate_and_send_code
 
 router = APIRouter()
 
@@ -39,8 +42,17 @@ except ImportError:  # pragma: no cover
 @router.post("/register", response_model=UserPublic, status_code=status.HTTP_201_CREATED)
 @register_limit
 async def register(request: Request, body: RegisterRequest, db: SessionDep) -> UserPublic:
-    user = await AuthService(db).register(body.email, body.password)
+    user = await AuthService(db).register(body.email, body.password, body.code)
     return UserPublic.model_validate(user)
+
+
+@router.post("/send-code", response_model=SendCodeResponse)
+async def send_code(body: SendCodeRequest) -> SendCodeResponse:
+    """Issue a 6-digit email verification code for registration.
+
+    Rate-limited per email (60s between sends, 5/day) by the service itself."""
+    result = generate_and_send_code(body.email)
+    return SendCodeResponse(ok=True, cooldown_s=result.cooldown_s, delivery=result.delivery)
 
 
 @router.post("/login", response_model=TokenPair)
@@ -56,7 +68,12 @@ async def refresh(body: RefreshRequest, db: SessionDep) -> TokenPair:
 
 @router.get("/me", response_model=UserMe)
 async def me(current_user: CurrentUserDep) -> UserMe:
-    return UserMe(id=current_user.id, email=current_user.email, settings=current_user.settings_json or {})
+    return UserMe(
+        id=current_user.id,
+        email=current_user.email,
+        settings=current_user.settings_json or {},
+        is_admin=current_user.is_admin,
+    )
 
 
 @router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)

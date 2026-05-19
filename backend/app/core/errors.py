@@ -60,6 +60,13 @@ class RateLimitedError(APIError):
         super().__init__("RATE_LIMITED", message, http_status=status.HTTP_429_TOO_MANY_REQUESTS)
 
 
+class ValidationError(APIError):
+    """User-facing validation failure (e.g., bad verification code)."""
+
+    def __init__(self, message: str = "Validation failed", details: dict[str, Any] | None = None) -> None:
+        super().__init__("VALIDATION_FAILED", message, http_status=status.HTTP_400_BAD_REQUEST, details=details)
+
+
 class UpstreamError(APIError):
     def __init__(self, message: str = "Upstream service error", details: dict[str, Any] | None = None) -> None:
         super().__init__("UPSTREAM_ERROR", message, http_status=status.HTTP_502_BAD_GATEWAY, details=details)

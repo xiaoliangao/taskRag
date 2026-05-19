@@ -4,7 +4,7 @@ from datetime import UTC, datetime
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.errors import DuplicateResourceError, UnauthorizedError
+from app.core.errors import DuplicateResourceError, ForbiddenError, UnauthorizedError
 from app.core.security import (
     create_access_token,
     create_refresh_token,
@@ -15,6 +15,7 @@ from app.core.security import (
 from app.db.models.user import User
 from app.db.repositories.user_repo import RefreshTokenRepository, UserRepository
 from app.schemas.auth import TokenPair, UserPublic
+from app.services.verification_code_service import verify_and_consume
 
 DEFAULT_USER_SETTINGS = {
     "timezone": "Asia/Singapore",
@@ -31,10 +32,11 @@ class AuthService:
         self.users = UserRepository(db)
         self.tokens = RefreshTokenRepository(db)
 
-    async def register(self, email: str, password: str) -> User:
+    async def register(self, email: str, password: str, code: str) -> User:
         existing = await self.users.get_by_email(email)
         if existing:
             raise DuplicateResourceError("Email already registered", {"field": "email"})
+        verify_and_consume(email, code)
         user = await self.users.create(
             email=email,
             password_hash=hash_password(password),
@@ -48,6 +50,8 @@ class AuthService:
         user = await self.users.get_by_email(email)
         if not user or not verify_password(password, user.password_hash):
             raise UnauthorizedError("Invalid email or password")
+        if user.disabled_at is not None:
+            raise ForbiddenError("Account disabled by administrator")
         return await self._issue_pair(user)
 
     async def refresh(self, refresh_token: str) -> TokenPair:

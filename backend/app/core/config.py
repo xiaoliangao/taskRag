@@ -66,12 +66,14 @@ class Settings(BaseSettings):
 
     siliconflow_llm_model: str = "Qwen/Qwen2.5-7B-Instruct"
 
-    # Email
+    # Email — port 465 uses implicit TLS (SMTP_SSL); 587 uses STARTTLS.
+    # 465 is recommended when reaching Gmail from networks where 587 is blocked.
     gmail_smtp_host: str = "smtp.gmail.com"
-    gmail_smtp_port: int = 587
+    gmail_smtp_port: int = 465
     gmail_username: str = ""
     gmail_app_password: str = ""
     email_from: str = ""
+    initial_admin_email: str = ""  # bootstrap: matching user promoted to admin on startup
 
     # Source API keys
     github_token: str = ""
