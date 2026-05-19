@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import select, update
+from sqlalchemy import delete, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.models.user import RefreshToken, User
@@ -33,6 +33,39 @@ class UserRepository:
         user.settings_json = settings
         await self.db.flush()
         return user
+
+    async def list_paginated(
+        self,
+        *,
+        q: str | None = None,
+        page: int = 1,
+        page_size: int = 20,
+    ) -> tuple[list[User], int]:
+        stmt = select(User)
+        count_stmt = select(func.count(User.id))
+        if q:
+            like = f"%{q.lower().strip()}%"
+            stmt = stmt.where(User.email.ilike(like))
+            count_stmt = count_stmt.where(User.email.ilike(like))
+        stmt = stmt.order_by(User.id.desc()).limit(page_size).offset((page - 1) * page_size)
+        rows = (await self.db.execute(stmt)).scalars().all()
+        total = (await self.db.execute(count_stmt)).scalar_one()
+        return list(rows), int(total)
+
+    async def list_by_ids(self, ids: list[int]) -> list[User]:
+        if not ids:
+            return []
+        result = await self.db.execute(select(User).where(User.id.in_(ids)))
+        return list(result.scalars().all())
+
+    async def list_all_active(self) -> list[User]:
+        result = await self.db.execute(
+            select(User).where(User.disabled_at.is_(None)).order_by(User.id)
+        )
+        return list(result.scalars().all())
+
+    async def delete_by_id(self, user_id: int) -> None:
+        await self.db.execute(delete(User).where(User.id == user_id))
 
 
 class RefreshTokenRepository:

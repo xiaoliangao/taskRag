@@ -5,7 +5,7 @@ from typing import Annotated
 from fastapi import Depends, Header
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.errors import NotFoundError, UnauthorizedError
+from app.core.errors import ForbiddenError, NotFoundError, UnauthorizedError
 from app.core.security import decode_access_token
 from app.db.models.chat import ChatSession
 from app.db.models.topic import Topic
@@ -46,6 +46,15 @@ async def get_current_user(
 
 
 CurrentUserDep = Annotated[User, Depends(get_current_user)]
+
+
+async def get_current_admin(current_user: CurrentUserDep) -> User:
+    if not current_user.is_admin:
+        raise ForbiddenError("Admin privileges required")
+    return current_user
+
+
+CurrentAdminDep = Annotated[User, Depends(get_current_admin)]
 
 
 async def get_owned_topic(

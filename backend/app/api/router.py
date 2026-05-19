@@ -23,6 +23,10 @@ api_router.include_router(tasks.router, tags=["tasks"])
 api_router.include_router(notifications.router, prefix="/notifications", tags=["notifications"])
 api_router.include_router(settings_route.router, prefix="/settings", tags=["settings"])
 
+from app.api.routes import admin as _admin_route  # noqa: E402
+
+api_router.include_router(_admin_route.router, prefix="/admin", tags=["admin"])
+
 # v1.1+ intelligence layer (added as each module is implemented)
 try:
     from app.api.routes import pulses  # noqa: F401

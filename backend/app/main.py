@@ -35,6 +35,33 @@ async def lifespan(app: FastAPI):
         logging.getLogger(__name__).warning(
             "Failed to ensure Qdrant collection on startup: %s", exc
         )
+
+    # Bootstrap: promote INITIAL_ADMIN_EMAIL to admin if that user exists. Safe to
+    # run every boot — idempotent. Lets a fresh deploy elect the first admin
+    # without poking the DB by hand.
+    if settings.initial_admin_email:
+        import logging
+
+        from sqlalchemy import update
+        from app.db.models.user import User
+        from app.db.session import get_sync_sessionmaker
+
+        try:
+            Session = get_sync_sessionmaker()
+            with Session() as db:
+                result = db.execute(
+                    update(User)
+                    .where(User.email == settings.initial_admin_email.lower().strip())
+                    .where(User.is_admin.is_(False))
+                    .values(is_admin=True)
+                )
+                if result.rowcount:
+                    db.commit()
+                    logging.getLogger(__name__).info(
+                        "Bootstrapped %s as admin", settings.initial_admin_email
+                    )
+        except Exception as exc:
+            logging.getLogger(__name__).warning("Initial-admin bootstrap failed: %s", exc)
     yield
 
 
