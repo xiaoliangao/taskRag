@@ -75,6 +75,254 @@
 }
 
 /* ============================================================
+   Atelier — daylight mirror palette
+   Warm ivory paper · olive ink · chartreuse highlight retained
+   ============================================================ */
+[data-theme="day"] {
+  --bg-base: #f3ede0;
+  --bg-canvas: #ece5d3;
+  --bg-surface: #faf6ea;
+  --bg-elevated: #ffffff;
+  --bg-overlay: rgba(243, 237, 224, 0.92);
+  --bg-hover: #ebe3cd;
+  --bg-active: #e1d8bf;
+  --bg-inset: #e7dec6;
+
+  --border-subtle: #e1d8bf;
+  --border-default: #cdc2a4;
+  --border-strong: #ada088;
+  --border-glow: rgba(93, 114, 32, 0.45);
+
+  --text-primary: #16160f;
+  --text-secondary: #46453a;
+  --text-tertiary: #75725f;
+  --text-muted: #a39e87;
+  --text-inverse: #faf6ea;
+
+  /* Olive promoted to interactive; chartreuse retained as a highlighter swatch. */
+  --accent: #5d7220;
+  --accent-hover: #6e8628;
+  --accent-dim: #95b832;
+  --accent-deep: #3d4c14;
+  --accent-bg-soft: rgba(212, 255, 74, 0.22);
+  --accent-bg: rgba(212, 255, 74, 0.38);
+  --accent-glow: rgba(93, 114, 32, 0.22);
+
+  --success: #2f7a4e;
+  --success-bg: rgba(47, 122, 78, 0.12);
+  --warning: #c47900;
+  --warning-bg: rgba(196, 121, 0, 0.14);
+  --danger: #b7332c;
+  --danger-bg: rgba(183, 51, 44, 0.12);
+  --info: #2a6dba;
+  --info-bg: rgba(42, 109, 186, 0.12);
+
+  --shadow-1: 0 1px 0 rgba(255, 255, 255, 0.6) inset, 0 1px 2px rgba(58, 50, 28, 0.08);
+  --shadow-2: 0 1px 0 rgba(255, 255, 255, 0.7) inset, 0 6px 18px rgba(58, 50, 28, 0.12);
+  --shadow-3: 0 1px 0 rgba(255, 255, 255, 0.8) inset, 0 22px 48px rgba(58, 50, 28, 0.18);
+  --glow-accent: 0 0 0 1px rgba(93, 114, 32, 0.32), 0 0 28px rgba(212, 255, 74, 0.4);
+}
+
+/* Day-mode body wash: warmer, sun-through-paper instead of vignette. */
+[data-theme="day"] body {
+  background:
+    radial-gradient(ellipse 80% 50% at 50% -10%, rgba(212, 255, 74, 0.18), transparent 60%),
+    radial-gradient(ellipse 60% 50% at 100% 110%, rgba(196, 121, 0, 0.08), transparent 65%),
+    var(--bg-base);
+}
+
+/* Day-mode grain — same SVG but lighter so it reads as paper fiber, not noise. */
+[data-theme="day"] body::before {
+  opacity: 0.55;
+  mix-blend-mode: multiply;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0.42  0 0 0 0 0.36  0 0 0 0 0.18  0 0 0 0.55 0'/></filter><rect width='100%' height='100%' filter='url(%23n)' opacity='0.35'/></svg>");
+}
+
+[data-theme="day"] *::-webkit-scrollbar-thumb {
+  border-color: var(--bg-canvas);
+}
+
+/* ============================================================
+   Theme transition — applies when toggling night ↔ day
+   ============================================================ */
+html,
+body {
+  transition:
+    background-color 280ms var(--ease-out),
+    color 200ms var(--ease-out);
+}
+
+/* Apply to common surfaces so the swap feels orchestrated, not jarring. */
+.app-shell,
+.app-sidebar,
+.app-topbar,
+.app-content,
+.nav-item,
+.user-chip,
+.icon-btn,
+.brand-glyph,
+.pill,
+.dot,
+button,
+input,
+textarea,
+select,
+.ant-card,
+.ant-modal-content,
+.ant-modal-header,
+.ant-drawer-content,
+.ant-input,
+.ant-input-affix-wrapper,
+.ant-select-selector,
+.ant-btn,
+.ant-table,
+.ant-table-thead > tr > th,
+.ant-tag,
+.ant-segmented {
+  transition:
+    background-color 280ms var(--ease-out),
+    border-color 280ms var(--ease-out),
+    color 200ms var(--ease-out),
+    box-shadow 280ms var(--ease-out);
+}
+
+/* ============================================================
+   Page transition + staggered first paint
+   ============================================================ */
+@keyframes page-rise {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+    filter: blur(2px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+    filter: blur(0);
+  }
+}
+
+@keyframes page-stagger {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.page-transition {
+  animation: page-rise 360ms var(--ease-out) both;
+  will-change: opacity, transform, filter;
+}
+
+/* Children with this class fade in with a slight delay cascade. */
+.page-transition > * {
+  animation: page-stagger 480ms var(--ease-out) both;
+}
+.page-transition > *:nth-child(1) { animation-delay: 40ms; }
+.page-transition > *:nth-child(2) { animation-delay: 90ms; }
+.page-transition > *:nth-child(3) { animation-delay: 140ms; }
+.page-transition > *:nth-child(4) { animation-delay: 190ms; }
+.page-transition > *:nth-child(5) { animation-delay: 230ms; }
+.page-transition > *:nth-child(n+6) { animation-delay: 270ms; }
+
+@media (prefers-reduced-motion: reduce) {
+  .page-transition,
+  .page-transition > * {
+    animation: none !important;
+  }
+  html,
+  body,
+  .app-shell,
+  .app-sidebar,
+  .app-topbar,
+  .app-content,
+  .nav-item,
+  .user-chip {
+    transition: none !important;
+  }
+}
+
+/* ============================================================
+   Mode-toggle pill — bespoke, font-mono, sliding indicator
+   ============================================================ */
+.mode-toggle {
+  position: relative;
+  display: inline-flex;
+  align-items: stretch;
+  height: 28px;
+  padding: 2px;
+  border: 1px solid var(--border-default);
+  border-radius: 999px;
+  background: var(--bg-surface);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.18em;
+  cursor: pointer;
+  user-select: none;
+  transition: border-color var(--d-fast) var(--ease-out);
+}
+.mode-toggle:hover {
+  border-color: var(--border-strong);
+}
+
+.mode-toggle__track {
+  position: absolute;
+  top: 2px;
+  bottom: 2px;
+  width: calc(50% - 2px);
+  border-radius: 999px;
+  background: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent-deep), 0 4px 12px var(--accent-glow);
+  transition: transform 340ms var(--ease-out);
+  pointer-events: none;
+}
+.mode-toggle[data-mode="night"] .mode-toggle__track {
+  transform: translateX(0);
+}
+.mode-toggle[data-mode="day"] .mode-toggle__track {
+  transform: translateX(100%);
+}
+
+.mode-toggle__cell {
+  position: relative;
+  z-index: 1;
+  width: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-tertiary);
+  transition: color 240ms var(--ease-out);
+}
+.mode-toggle[data-mode="night"] .mode-toggle__cell--n,
+.mode-toggle[data-mode="day"]   .mode-toggle__cell--d {
+  color: var(--text-inverse);
+  font-weight: 600;
+}
+
+/* Subtle dot underneath the active letter for character. */
+.mode-toggle__cell::after {
+  content: "";
+  position: absolute;
+  bottom: 5px;
+  width: 3px;
+  height: 3px;
+  border-radius: 999px;
+  background: currentColor;
+  opacity: 0;
+  transform: translateY(2px);
+  transition: opacity 220ms var(--ease-out), transform 220ms var(--ease-out);
+}
+.mode-toggle[data-mode="night"] .mode-toggle__cell--n::after,
+.mode-toggle[data-mode="day"]   .mode-toggle__cell--d::after {
+  opacity: 0.7;
+  transform: translateY(0);
+}
+
+/* ============================================================
    Reset · base
    ============================================================ */
 

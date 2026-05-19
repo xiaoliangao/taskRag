@@ -16,6 +16,8 @@ import { logout } from "../api/auth";
 import { listNotifications } from "../api/notifications";
 import { listTopics } from "../api/topics";
 import { useAuthStore } from "../stores/authStore";
+import PageTransition from "./PageTransition";
+import ThemeToggle from "./ThemeToggle";
 import TopicCreateModal from "./TopicCreateModal";
 
 export default function AppLayout() {
@@ -230,7 +232,8 @@ export default function AppLayout() {
             </span>
           </div>
 
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <ThemeToggle />
             <Tooltip title="通知">
               <button className="icon-btn" onClick={() => navigate("/notifications")}>
                 <Badge count={notif?.unread_count ?? 0} size="small" offset={[2, -2]}>
@@ -251,7 +254,9 @@ export default function AppLayout() {
         </header>
 
         <div className="app-content">
-          <Outlet />
+          <PageTransition>
+            <Outlet />
+          </PageTransition>
         </div>
       </main>
 
