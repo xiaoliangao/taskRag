@@ -11,7 +11,7 @@ from app.schemas.picker import (
     PreviewResponse,
 )
 from app.schemas.topic import CollectTriggerResponse, TopicCreate, TopicPublic, TopicUpdate
-from app.services.picker_service import search_preview
+from app.services.picker_service import invalidate_preview_cache, search_preview
 from app.services.topic_service import TopicService
 
 router = APIRouter()
@@ -111,4 +111,5 @@ async def topic_collect_selected(
         )
     except Exception:
         pass
+    invalidate_preview_cache(topic.id)
     return CollectSelectedResponse(task_id=task.id, count=len(body.picks), status="queued")

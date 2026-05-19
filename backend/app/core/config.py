@@ -86,6 +86,8 @@ class Settings(BaseSettings):
     backfill_days: int = 180                  # how far back the initial fill reaches
     backfill_max_results: int = 10            # papers to pull on first-time backfill
     manual_preview_max_results: int = 20      # search-preview list size for manual picker
+    manual_preview_cache_ttl_s: int = 600     # Redis TTL for search-preview cache (10 min)
+    manual_preview_source_timeout_s: float = 35.0  # per-source soft timeout before falling back
     history_turns: int = 5
     vector_top_k: int = 20
     rerank_top_n: int = 5
