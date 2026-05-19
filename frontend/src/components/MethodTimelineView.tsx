@@ -179,7 +179,7 @@ export default function MethodTimelineView({ topicId, onJumpDocument }: Props) {
               演化关系 ({data.edges.length})
             </Typography.Title>
             {data.edges.length === 0 ? (
-              <Empty image={null} description="尚无演化关系；点"重建时间线"让 LLM 推断" />
+              <Empty image={null} description="尚无演化关系;点“重建时间线”让 LLM 推断" />
             ) : (
               <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                 {data.edges.map((e) => {
