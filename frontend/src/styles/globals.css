@@ -778,8 +778,10 @@ a:hover {
   display: flex;
   flex-direction: column;
 }
-.ant-tabs[style*="flex: 1"] > .ant-tabs-content-holder > .ant-tabs-content > .ant-tabs-tabpane,
-.ant-tabs[style*="flex:1"] > .ant-tabs-content-holder > .ant-tabs-content > .ant-tabs-tabpane {
+/* Only the ACTIVE tabpane gets flex-stretch — inactive ones must stay
+   display:none (antd's default) or all panels render stacked. */
+.ant-tabs[style*="flex: 1"] > .ant-tabs-content-holder > .ant-tabs-content > .ant-tabs-tabpane-active,
+.ant-tabs[style*="flex:1"] > .ant-tabs-content-holder > .ant-tabs-content > .ant-tabs-tabpane-active {
   flex: 1;
   min-height: 0;
   display: flex;
