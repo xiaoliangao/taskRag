@@ -44,19 +44,35 @@ async def _gather_context(
     topic_id: int,
     question: str,
 ) -> tuple[list[Citation], list[dict]]:
-    """Multi-query retrieval (v1.4 Sprint 6).
+    """Adaptive retrieval (Wave-3 Pkg-QR).
 
-    Asks the LLM for 1+2 alternate phrasings of the question, runs each through
-    the hybrid retriever, then takes the union by chunk_id with the best score
-    across all variants. Falls back to the single-query path on any failure.
+    The query router classifies the question into factual / comparison /
+    synthesis / multi_step, then dials retrieval depth:
+      - multi-query rewrite variants (1 / 2 / 3 / 3)
+      - whether CRAG corrective-retry runs
+      - whether GraphRAG 1-hop expansion runs
+    Falls back to "synthesis" (current full pipeline) on any classifier
+    failure — correctness over speed.
     """
-    variants = [question]
-    try:
-        from app.services.query_rewrite import generate_variants
+    from app.rag.query_router import classify_query, config_for
 
-        variants = generate_variants(question, n=2)
-    except Exception as exc:
-        log.warning("query_rewrite_skipped: %s", exc)
+    route = classify_query(question)
+    cfg = config_for(route)
+    log.info(
+        "query_router route=%s variants=%d crag=%s graphrag=%s",
+        route, cfg["variants"], cfg["crag"], cfg["graphrag"],
+    )
+
+    variants = [question]
+    if cfg["variants"] > 1:
+        try:
+            from app.services.query_rewrite import generate_variants
+
+            # generate_variants returns original + N rewrites, so request
+            # one less than the total we want.
+            variants = generate_variants(question, n=cfg["variants"] - 1)
+        except Exception as exc:
+            log.warning("query_rewrite_skipped: %s", exc)
 
     # Run all variants in parallel (each does BM25+vector+rerank internally).
     all_runs = await asyncio.gather(
@@ -89,8 +105,9 @@ async def _gather_context(
     settings = get_settings()
 
     # v1.5 B-1: CRAG reflection — if grader says "low/medium" relevance, retry
-    # once with an LLM-rewritten query and merge.
-    if settings.crag_enabled:
+    # once with an LLM-rewritten query and merge. Router can disable this for
+    # factual queries where rewriting won't help.
+    if settings.crag_enabled and cfg["crag"]:
         try:
             from app.services.crag import reflective_retrieve
 
@@ -108,7 +125,8 @@ async def _gather_context(
             log.warning("crag_skipped: %s", exc)
 
     # v1.5 B-2: GraphRAG — pull 1-hop neighbors of top documents via document_relations.
-    if settings.graphrag_enabled:
+    # Skipped for factual queries (don't need the wider context).
+    if settings.graphrag_enabled and cfg["graphrag"]:
         try:
             from app.services.graphrag import expand_with_neighbors
 
