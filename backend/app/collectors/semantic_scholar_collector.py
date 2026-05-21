@@ -73,11 +73,19 @@ class SemanticScholarCollector(BaseCollector):
                     continue
 
                 if resp.status_code == 429:
+                    rate_limited = True
+                    last_detail = f"HTTP 429 on keyword '{kw}'"
+                    # Without an API key SS rate-limits almost immediately and
+                    # won't recover within a user request. Bail the entire
+                    # search rather than wasting 5s per remaining keyword.
+                    if not self._api_key:
+                        log.warning(
+                            "Semantic Scholar 429 for '%s' (no API key) — aborting", kw
+                        )
+                        break
                     log.warning(
                         "Semantic Scholar 429 for '%s'; pausing 5s before next keyword", kw
                     )
-                    rate_limited = True
-                    last_detail = f"HTTP 429 on keyword '{kw}'"
                     time.sleep(5)
                     continue
                 if resp.status_code >= 400:

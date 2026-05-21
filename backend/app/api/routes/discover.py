@@ -95,18 +95,31 @@ async def discover_search_route(
                 seen.add(v.lower())
                 expanded.append(v)
 
+    # Drop Semantic Scholar from defaults when no API key is configured — it
+    # 429s immediately on cold accounts and burns 5+s per keyword in retries.
+    # Users can still pin it explicitly via body.sources.
+    settings = get_settings()
+    ss_usable = bool(settings.semantic_scholar_api_key)
+
     requested = [s for s in body.sources if s in _SEARCHABLE_SOURCES]
     if requested:
         ordered_sources = requested
     elif _has_cjk(raw_query) and any(not _has_cjk(k) for k in expanded):
         # Mixed CJK+English after expansion: arxiv direct is still useful for
         # the English terms; keep it but put it last so timeouts don't block.
-        ordered_sources = ["openalex", "semantic_scholar", "arxiv"]
+        ordered_sources = ["openalex"]
+        if ss_usable:
+            ordered_sources.append("semantic_scholar")
+        ordered_sources.append("arxiv")
     elif _has_cjk(raw_query):
         # Pure CJK survived expansion → arxiv is useless.
-        ordered_sources = ["openalex", "semantic_scholar"]
+        ordered_sources = ["openalex"]
+        if ss_usable:
+            ordered_sources.append("semantic_scholar")
     else:
-        ordered_sources = list(_SEARCHABLE_SOURCES)
+        ordered_sources = ["arxiv", "openalex"]
+        if ss_usable:
+            ordered_sources.append("semantic_scholar")
 
     docs, rate_limited = discover_search(
         keywords=expanded,
