@@ -31,6 +31,10 @@ from app.api.routes import discover as _discover_route  # noqa: E402
 
 api_router.include_router(_discover_route.router, prefix="/discover", tags=["discover"])
 
+from app.api.routes import annotations as _annotations_route  # noqa: E402
+
+api_router.include_router(_annotations_route.router, tags=["annotations"])
+
 # v1.1+ intelligence layer (added as each module is implemented)
 try:
     from app.api.routes import pulses  # noqa: F401
