@@ -47,6 +47,7 @@ export interface DocumentSummary {
   added_at: string;
   reading_priority?: "high" | "medium" | "low" | null;
   relevance_score?: number | null;
+  abstract_only?: boolean | null;
 }
 
 export interface DocumentChunkPublic {
@@ -68,6 +69,7 @@ export interface DocumentDetail {
   abstract: string | null;
   full_text: string | null;
   chunks: DocumentChunkPublic[];
+  abstract_only?: boolean | null;
 }
 
 export interface DocumentListResponse {

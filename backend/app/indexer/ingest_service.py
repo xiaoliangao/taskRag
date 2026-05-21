@@ -41,9 +41,21 @@ def _content_hash(raw: RawDocument) -> str:
 
 
 def _parse_to_chunks(document: Document, raw: RawDocument) -> tuple[list[ChunkData], str | None]:
-    """Return chunks and an optional full_text_path written to disk."""
+    """Return chunks and an optional full_text_path written to disk.
+
+    Side effect: when we fall back to abstract because the PDF was unreachable
+    or unparseable, stamps `document.metadata_json["abstract_only"] = True` so
+    the UI can warn that this document's RAG coverage is shallow. When the
+    full PDF parses cleanly the flag is set to False (rather than omitted) so
+    callers can distinguish "known full-text" from "never tried".
+    """
     settings = get_settings()
     fulltext_path: str | None = None
+
+    def _stamp(abstract_only: bool) -> None:
+        meta = dict(document.metadata_json or {})
+        meta["abstract_only"] = abstract_only
+        document.metadata_json = meta
 
     # arXiv (direct or via OpenAlex/SS fallback) + OpenAlex/SS with PDF url.
     if (
@@ -81,19 +93,24 @@ def _parse_to_chunks(document: Document, raw: RawDocument) -> tuple[list[ChunkDa
                     for s in parsed.sections
                     if s.text and s.text.strip()
                 ]
+                _stamp(False)
                 if cleaned_sections:
                     return split_sections(cleaned_sections), fulltext_path
                 return split_plain_text(cleaned_full, section_title="Body"), fulltext_path
         # Fallback: abstract only
         if raw.abstract:
+            _stamp(True)
             return split_plain_text(clean_text(raw.abstract), section_title="Abstract"), None
+        _stamp(True)
         return [], None
 
     # Generic fallback for other sources: use abstract / metadata text if available
     body = raw.abstract or raw.metadata.get("body") or raw.metadata.get("readme") or ""
     body = clean_text(body)
     if not body:
+        _stamp(True)
         return [], None
+    _stamp(True)
     return split_plain_text(body, section_title="Body"), None
 
 

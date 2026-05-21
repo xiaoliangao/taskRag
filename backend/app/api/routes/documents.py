@@ -69,6 +69,7 @@ async def list_documents(
     summaries: list[DocumentSummary] = []
     for doc, link in items:
         ins = insight_by_doc.get(doc.id)
+        meta = doc.metadata_json or {}
         summaries.append(
             DocumentSummary(
                 id=doc.id,
@@ -82,6 +83,7 @@ async def list_documents(
                 added_at=link.added_at,
                 reading_priority=(ins.reading_priority if ins else None),
                 relevance_score=(ins.relevance_score if ins else None),
+                abstract_only=meta.get("abstract_only"),
             )
         )
     return DocumentListResponse(items=summaries, page=page, page_size=page_size, total=total)
@@ -106,6 +108,7 @@ async def get_document(
                 full_text = p.read_text(encoding="utf-8", errors="ignore")[:200_000]
         except Exception:
             full_text = None
+    meta = doc.metadata_json or {}
     return DocumentDetail(
         id=doc.id,
         source=doc.source,
@@ -115,6 +118,7 @@ async def get_document(
         url=doc.url,
         abstract=doc.abstract,
         full_text=full_text,
+        abstract_only=meta.get("abstract_only"),
         chunks=[
             DocumentChunkPublic(
                 id=c.id,

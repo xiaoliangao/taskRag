@@ -173,6 +173,23 @@ export default function DocumentDetailDrawer({ topicId, documentId, open, onClos
             >
               <LinkOutlined /> 跳转原文
             </a>
+            {data.abstract_only && (
+              <span
+                title="未抓到全文 PDF,仅基于摘要建立索引"
+                style={{
+                  fontFamily: "var(--font-mono)",
+                  fontSize: 10,
+                  letterSpacing: "0.05em",
+                  padding: "2px 8px",
+                  border: "1px solid var(--warning)",
+                  background: "var(--warning-bg)",
+                  borderRadius: 999,
+                  color: "var(--warning)",
+                }}
+              >
+                仅摘要 · RAG 浅
+              </span>
+            )}
           </div>
 
           <Tabs

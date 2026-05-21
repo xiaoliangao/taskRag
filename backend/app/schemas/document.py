@@ -17,6 +17,9 @@ class DocumentSummary(BaseModel):
     added_at: datetime
     reading_priority: str | None = None  # high / medium / low / unknown
     relevance_score: float | None = None
+    # True when ingestion only captured the abstract (no full PDF retrievable).
+    # Lets the UI flag shallow RAG coverage on a row-by-row basis.
+    abstract_only: bool | None = None
 
 
 class DocumentChunkPublic(BaseModel):
@@ -38,6 +41,7 @@ class DocumentDetail(BaseModel):
     abstract: str | None = None
     full_text: str | None = None
     chunks: list[DocumentChunkPublic] = []
+    abstract_only: bool | None = None
 
 
 class DocumentListResponse(BaseModel):

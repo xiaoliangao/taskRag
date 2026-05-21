@@ -88,16 +88,49 @@ def _parse_pub_date(work: dict) -> datetime | None:
 
 
 def _best_pdf_url(work: dict) -> str | None:
-    oa = work.get("open_access") or {}
-    if oa.get("oa_url"):
-        return oa["oa_url"]
+    """Pick a direct PDF URL. We prefer `*.pdf_url` fields (genuine PDF
+    streams) over `open_access.oa_url`, which is often a publisher landing
+    page that the download path would then reject. landing → PDF redirect
+    chains exist but burn an extra request; prefer direct first."""
     primary = work.get("primary_location") or {}
     if primary.get("pdf_url"):
         return primary["pdf_url"]
     for loc in work.get("locations") or []:
         if loc.get("pdf_url"):
             return loc["pdf_url"]
+    oa = work.get("open_access") or {}
+    if oa.get("oa_url"):
+        return oa["oa_url"]
     return None
+
+
+def _resolve_via_unpaywall(doi: str) -> str | None:
+    """Last-resort PDF lookup for paywalled OpenAlex works.
+
+    Unpaywall aggregates open-access copies of papers (preprints, repository
+    deposits) indexed by DOI. Free, no key required, ~100k/day per email.
+    Returns a direct PDF URL when one exists, otherwise None.
+    """
+    if not doi:
+        return None
+    # Normalize DOI: strip the "https://doi.org/" prefix Unpaywall doesn't want.
+    norm = doi.removeprefix("https://doi.org/").removeprefix("http://doi.org/").strip()
+    if not norm:
+        return None
+    try:
+        with httpx.Client(timeout=8.0) as c:
+            resp = c.get(
+                f"https://api.unpaywall.org/v2/{norm}",
+                params={"email": POLITE_MAILTO},
+            )
+            if resp.status_code != 200:
+                return None
+            data = resp.json()
+            best = data.get("best_oa_location") or {}
+            return best.get("url_for_pdf") or None
+    except Exception as exc:
+        log.debug("unpaywall lookup failed for %s: %s", norm, exc)
+        return None
 
 
 class OpenAlexCollector(BaseCollector):
@@ -228,34 +261,49 @@ class OpenAlexCollector(BaseCollector):
 
     def download_pdf(self, raw_doc: RawDocument) -> Path | None:
         settings = get_settings()
-        pdf_url = raw_doc.metadata.get("pdf_url") or raw_doc.raw_content_url
-        if not pdf_url:
-            return None
         target_dir = settings.pdf_storage_dir / raw_doc.source
         target_dir.mkdir(parents=True, exist_ok=True)
         safe_id = raw_doc.external_id.replace("/", "_")
         target = target_dir / f"{safe_id}.pdf"
         if target.exists() and target.stat().st_size > 0:
             return target
-        try:
-            with httpx.Client(
-                timeout=60.0,
-                follow_redirects=True,
-                headers={"User-Agent": f"TaskRAG/0.1 (mailto:{POLITE_MAILTO})"},
-            ) as c:
-                resp = c.get(pdf_url)
-                if resp.status_code >= 400:
-                    log.warning(
-                        "OpenAlex PDF download failed %s: %d", pdf_url, resp.status_code
-                    )
-                    return None
-                # Some open-access landing pages return HTML, not PDF. Guard against that.
-                ct = resp.headers.get("content-type", "")
-                if "pdf" not in ct.lower() and not resp.content.startswith(b"%PDF"):
-                    log.info("OpenAlex URL not a PDF (%s); skipping: %s", ct, pdf_url)
-                    return None
-                target.write_bytes(resp.content)
-            return target
-        except Exception as exc:
-            log.warning("OpenAlex PDF download exception %s: %s", pdf_url, exc)
-            return None
+
+        # Candidate URLs in order: the one OpenAlex itself chose, then a DOI →
+        # Unpaywall lookup. Tried sequentially because Unpaywall costs a network
+        # round-trip; only worth paying when OpenAlex came up empty or returned
+        # a landing page.
+        candidates: list[str] = []
+        primary = raw_doc.metadata.get("pdf_url") or raw_doc.raw_content_url
+        if primary:
+            candidates.append(primary)
+
+        for pdf_url in candidates + [None]:  # extra None slot triggers Unpaywall
+            if pdf_url is None:
+                # Already tried direct candidates above; try Unpaywall.
+                doi = raw_doc.metadata.get("doi")
+                pdf_url = _resolve_via_unpaywall(doi) if doi else None
+                if not pdf_url:
+                    break
+                log.info("OpenAlex Unpaywall recovery for %s → %s", raw_doc.external_id, pdf_url)
+            try:
+                with httpx.Client(
+                    timeout=60.0,
+                    follow_redirects=True,
+                    headers={"User-Agent": f"TaskRAG/0.1 (mailto:{POLITE_MAILTO})"},
+                ) as c:
+                    resp = c.get(pdf_url)
+                    if resp.status_code >= 400:
+                        log.info(
+                            "OpenAlex PDF candidate %s failed: HTTP %d", pdf_url, resp.status_code
+                        )
+                        continue
+                    ct = resp.headers.get("content-type", "")
+                    if "pdf" not in ct.lower() and not resp.content.startswith(b"%PDF"):
+                        log.info("OpenAlex URL not a PDF (%s); skipping: %s", ct, pdf_url)
+                        continue
+                    target.write_bytes(resp.content)
+                return target
+            except Exception as exc:
+                log.warning("OpenAlex PDF download exception %s: %s", pdf_url, exc)
+                continue
+        return None

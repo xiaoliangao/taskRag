@@ -185,6 +185,24 @@ export default function DocumentList({ topicId }: Props) {
                         {PRIORITY_LABEL[d.reading_priority] || d.reading_priority}
                       </span>
                     )}
+                    {d.abstract_only && (
+                      <Tooltip title="未抓到全文 PDF,仅基于摘要建立索引;RAG/问答效果会比全文索引浅">
+                        <span
+                          style={{
+                            fontFamily: "var(--font-mono)",
+                            fontSize: 10,
+                            letterSpacing: "0.05em",
+                            padding: "1px 7px",
+                            border: "1px solid var(--border-default)",
+                            background: "var(--bg-inset)",
+                            borderRadius: 999,
+                            color: "var(--text-tertiary)",
+                          }}
+                        >
+                          仅摘要
+                        </span>
+                      </Tooltip>
+                    )}
                     <span
                       style={{
                         fontFamily: "var(--font-mono)",
