@@ -64,24 +64,35 @@ class ChunkRepository:
         return (result.scalar_one() or 0) > 0
 
     async def list_for_document(self, document_id: int) -> Sequence[Chunk]:
+        # Hide parent rows from the document-detail view — they duplicate
+        # child content (parent = section, children = paragraphs of section).
         result = await self.db.execute(
-            select(Chunk).where(Chunk.document_id == document_id).order_by(Chunk.chunk_index)
+            select(Chunk)
+            .where(Chunk.document_id == document_id, Chunk.is_parent.is_(False))
+            .order_by(Chunk.chunk_index)
         )
         return result.scalars().all()
 
     async def list_vector_ids(self, document_id: int) -> Sequence[str]:
+        # Filter NULLs — parent chunks (Wave-3 Pkg-PC) have no Qdrant point.
         result = await self.db.execute(
-            select(Chunk.vector_id).where(Chunk.document_id == document_id)
+            select(Chunk.vector_id).where(
+                Chunk.document_id == document_id,
+                Chunk.vector_id.isnot(None),
+            )
         )
-        return [str(v) for v in result.scalars().all()]
+        return [str(v) for v in result.scalars().all() if v is not None]
 
     async def list_vector_ids_for_documents(self, document_ids: Sequence[int]) -> Sequence[str]:
         if not document_ids:
             return []
         result = await self.db.execute(
-            select(Chunk.vector_id).where(Chunk.document_id.in_(document_ids))
+            select(Chunk.vector_id).where(
+                Chunk.document_id.in_(document_ids),
+                Chunk.vector_id.isnot(None),
+            )
         )
-        return [str(v) for v in result.scalars().all()]
+        return [str(v) for v in result.scalars().all() if v is not None]
 
     async def insert_many(self, document_id: int, rows: list[dict]) -> Sequence[Chunk]:
         chunks: list[Chunk] = []

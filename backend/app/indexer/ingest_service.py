@@ -189,15 +189,51 @@ def ingest_raw_document(
         db.flush()
         return IngestResult(skipped=True, document_id=document.id, newly_associated=newly_associated)
 
-    embedder = get_embedder()
-    vectors = embedder.embed_texts([c.text for c in chunks])
+    # Parent-Child write order (Wave-3 Pkg-PC):
+    # 1. Insert parent rows first (no embedding, vector_id NULL), flush to
+    #    receive primary keys.
+    # 2. Insert child rows with parent_id wired to the matching parent's PK,
+    #    embed children, push only children to Qdrant.
+    # Old single-tier chunks (no `is_parent` markers on ChunkData defaults)
+    # still go through the child path with parent_id=NULL, preserving
+    # backward compatibility with any caller that didn't get migrated.
+    parent_chunks = [c for c in chunks if c.is_parent]
+    child_chunks = [c for c in chunks if not c.is_parent]
 
-    # Insert chunks
-    chunk_rows: list[Chunk] = []
+    parent_idx_to_row: dict[int, Chunk] = {}
+    for c in parent_chunks:
+        row = Chunk(
+            document_id=document.id,
+            chunk_index=c.chunk_index,
+            text=c.text,
+            token_count=c.token_count,
+            section_title=c.section_title,
+            page_start=c.page_start,
+            page_end=c.page_end,
+            vector_id=None,
+            is_parent=True,
+            parent_id=None,
+        )
+        db.add(row)
+        parent_idx_to_row[c.chunk_index] = row
+    if parent_chunks:
+        # Flush so parent rows acquire ids before we wire children to them.
+        db.flush()
+
+    embedder = get_embedder()
+    child_texts = [c.text for c in child_chunks]
+    vectors = embedder.embed_texts(child_texts) if child_texts else []
+
+    chunk_rows: list[Chunk] = list(parent_idx_to_row.values())
     points: list[dict] = []
-    for c, vec in zip(chunks, vectors, strict=False):
+    for c, vec in zip(child_chunks, vectors, strict=False):
         vid = stable_vector_id(document.source, document.external_id, c.chunk_index, document.doc_version)
-        chunk_row = Chunk(
+        parent_row = (
+            parent_idx_to_row.get(c.parent_chunk_index)
+            if c.parent_chunk_index is not None
+            else None
+        )
+        row = Chunk(
             document_id=document.id,
             chunk_index=c.chunk_index,
             text=c.text,
@@ -206,9 +242,11 @@ def ingest_raw_document(
             page_start=c.page_start,
             page_end=c.page_end,
             vector_id=vid,
+            is_parent=False,
+            parent_id=parent_row.id if parent_row is not None else None,
         )
-        db.add(chunk_row)
-        chunk_rows.append(chunk_row)
+        db.add(row)
+        chunk_rows.append(row)
         points.append(
             {
                 "id": str(vid),

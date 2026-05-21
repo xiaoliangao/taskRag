@@ -63,6 +63,7 @@ async def _bm25_search_cross(
                plainto_tsquery('english', :query) AS q
          WHERE td.topic_id = ANY(:topic_ids)
            AND c.text_tsv @@ q
+           AND c.is_parent = false
          ORDER BY rank DESC
          LIMIT :limit
         """

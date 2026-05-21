@@ -115,6 +115,9 @@ async def _bm25_search_chunks(
     """
     if not (query or "").strip():
         return []
+    # Skip parent rows — they duplicate child content (parent text fully
+    # contains its children) so BM25 would surface both, polluting RRF. We
+    # only ever search children; parents are pulled later as expanded context.
     stmt = text(
         """
         SELECT c.id, ts_rank_cd(c.text_tsv, q) AS rank
@@ -123,6 +126,7 @@ async def _bm25_search_chunks(
                plainto_tsquery('english', :query) AS q
          WHERE td.topic_id = :topic_id
            AND c.text_tsv @@ q
+           AND c.is_parent = false
          ORDER BY rank DESC
          LIMIT :limit
         """
@@ -275,4 +279,37 @@ async def retrieve_for_topic(
             deduped.append(c)
         citations = deduped
 
-    return citations[:top_n]
+    final = citations[:top_n]
+
+    # 8) Parent-Child (Wave-3 Pkg-PC): we reranked using the precise child
+    # text, but the LLM benefits from the surrounding section as context.
+    # Fetch parent rows for the final picks and swap text. Old chunks
+    # without a parent_id are untouched.
+    parent_ids = {
+        chunks_by_id[c.chunk_id].parent_id
+        for c in final
+        if c.chunk_id and c.chunk_id in chunks_by_id and chunks_by_id[c.chunk_id].parent_id
+    }
+    if parent_ids:
+        rows = (
+            await db.execute(
+                select(Chunk.id, Chunk.text, Chunk.page_start, Chunk.page_end).where(
+                    Chunk.id.in_(list(parent_ids))
+                )
+            )
+        ).all()
+        parent_by_id = {row.id: row for row in rows}
+        for c in final:
+            chunk = chunks_by_id.get(c.chunk_id) if c.chunk_id else None
+            if chunk is None or not chunk.parent_id:
+                continue
+            parent_row = parent_by_id.get(chunk.parent_id)
+            if parent_row is None:
+                continue
+            c.text = parent_row.text
+            # Page range of the parent (the whole section) is more informative
+            # than the child's single-paragraph range for citation display.
+            c.page_start = parent_row.page_start or c.page_start
+            c.page_end = parent_row.page_end or c.page_end
+
+    return final

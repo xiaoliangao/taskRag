@@ -6,6 +6,7 @@ from typing import Any
 
 from sqlalchemy import (
     BigInteger,
+    Boolean,
     DateTime,
     ForeignKey,
     Index,
@@ -61,7 +62,16 @@ class Chunk(Base):
     section_title: Mapped[str | None] = mapped_column(Text, nullable=True)
     page_start: Mapped[int | None] = mapped_column(Integer, nullable=True)
     page_end: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    vector_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False, unique=True)
+    # Nullable: parents don't get a vector since we only embed children.
+    vector_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), nullable=True, unique=True
+    )
+    # Self-referential parent. Children point to a parent row; parents have
+    # parent_id IS NULL and is_parent=true.
+    parent_id: Mapped[int | None] = mapped_column(
+        BigInteger, ForeignKey("chunks.id", ondelete="SET NULL"), nullable=True
+    )
+    is_parent: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
