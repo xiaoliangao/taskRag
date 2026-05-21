@@ -120,21 +120,22 @@ class OpenAlexCollector(BaseCollector):
 
         with httpx.Client(timeout=self._timeout, headers=headers) as client:
             for kw in keywords:
-                # Scope to title+abstract instead of full-text — prevents
-                # mention-in-references from dragging unrelated papers in.
-                kw_filter = f"title_and_abstract.search:{kw}"
-                full_filter = (
-                    f"{kw_filter},from_publication_date:{from_date}"
-                    if from_date
-                    else kw_filter
-                )
+                # Use OpenAlex's top-level `search` param — it runs a real
+                # TF-IDF over title/abstract/keywords and supports
+                # `sort=relevance_score:desc`. The previous filter-based
+                # approach (`title_and_abstract.search:term`) only did fuzzy
+                # boolean matching with no relevance ranking, so combined with
+                # `sort=publication_date:desc` it surfaced "newest paper that
+                # happens to mention one of these words" — i.e. noise.
                 params: dict[str, Any] = {
-                    "filter": full_filter,
+                    "search": kw,
                     "per-page": min(max_results, 25),
-                    "sort": "publication_date:desc",
+                    "sort": "relevance_score:desc",
                     "select": FIELDS,
                     "mailto": POLITE_MAILTO,
                 }
+                if from_date:
+                    params["filter"] = f"from_publication_date:{from_date}"
 
                 try:
                     resp = client.get(f"{OA_BASE}/works", params=params)
