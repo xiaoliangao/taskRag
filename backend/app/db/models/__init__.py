@@ -1,5 +1,6 @@
 from app.db.models.annotation import Annotation  # noqa: F401
 from app.db.models.chat import ChatMessage, ChatSession  # noqa: F401
+from app.db.models.eval import RagEvalQuestion, RagEvalRun  # noqa: F401
 from app.db.models.document import Chunk, Document, TopicDocument  # noqa: F401
 from app.db.models.intel import (  # noqa: F401
     DocumentBriefing,
