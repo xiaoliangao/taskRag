@@ -39,6 +39,10 @@ from app.api.routes import translation as _translation_route  # noqa: E402
 
 api_router.include_router(_translation_route.router, prefix="/translate", tags=["translate"])
 
+from app.api.routes import admin_eval as _admin_eval_route  # noqa: E402
+
+api_router.include_router(_admin_eval_route.router, prefix="/admin/eval", tags=["admin-eval"])
+
 # v1.1+ intelligence layer (added as each module is implemented)
 try:
     from app.api.routes import pulses  # noqa: F401

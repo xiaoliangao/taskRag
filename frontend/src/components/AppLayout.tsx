@@ -4,6 +4,7 @@ import {
   ClusterOutlined,
   CompassOutlined,
   CrownOutlined,
+  ExperimentOutlined,
   HeartOutlined,
   LogoutOutlined,
   PlusOutlined,
@@ -80,6 +81,7 @@ export default function AppLayout() {
   const isSettingsActive = location.pathname.startsWith("/settings");
   const isAdminUsersActive = location.pathname.startsWith("/admin/users");
   const isAdminHealthActive = location.pathname.startsWith("/admin/health");
+  const isAdminEvalActive = location.pathname.startsWith("/admin/eval");
   const activeTopicId = (() => {
     const m = location.pathname.match(/^\/topics\/(\d+)/);
     return m ? Number(m[1]) : null;
@@ -176,6 +178,13 @@ export default function AppLayout() {
             >
               <HeartOutlined />
               <span>服务体征</span>
+            </div>
+            <div
+              className={`nav-item ${isAdminEvalActive ? "active" : ""}`}
+              onClick={() => navigate("/admin/eval")}
+            >
+              <ExperimentOutlined />
+              <span>RAG 评估</span>
             </div>
           </div>
         )}

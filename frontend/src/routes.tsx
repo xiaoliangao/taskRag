@@ -3,6 +3,7 @@ import { createBrowserRouter, Navigate } from "react-router-dom";
 import AppLayout from "./components/AppLayout";
 import RequireAdmin from "./components/RequireAdmin";
 import RequireAuth from "./components/RequireAuth";
+import AdminEvalPage from "./pages/AdminEvalPage";
 import AdminHealthPage from "./pages/AdminHealthPage";
 import AdminUsersPage from "./pages/AdminUsersPage";
 import CrossTopicChatPage from "./pages/CrossTopicChatPage";
@@ -46,6 +47,14 @@ export const router = createBrowserRouter([
         element: (
           <RequireAdmin>
             <AdminHealthPage />
+          </RequireAdmin>
+        ),
+      },
+      {
+        path: "admin/eval",
+        element: (
+          <RequireAdmin>
+            <AdminEvalPage />
           </RequireAdmin>
         ),
       },
