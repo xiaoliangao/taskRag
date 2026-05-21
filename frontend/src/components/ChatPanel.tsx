@@ -13,23 +13,19 @@ import MarkdownView from "./MarkdownView";
 import { pinChatMessage } from "../api/intel";
 import {
   createSession,
+  listChatMemory,
   listMessages,
   listSessions,
   streamUrl,
   updateSession,
 } from "../api/qa";
 import type { ChatMessage, ChatMode, Citation } from "../types/api";
+import { CHAT_MODES, CHAT_MODE_DESC } from "../utils/chatModes";
 import { consumeStream } from "../utils/sse";
 import ChatMemoryDrawer from "./ChatMemoryDrawer";
 import CitationPanel from "./CitationPanel";
 
-const CHAT_MODE_OPTIONS = [
-  { label: "默认", value: "default" },
-  { label: "导师", value: "mentor" },
-  { label: "入门", value: "beginner" },
-  { label: "辩论", value: "debate" },
-  { label: "审稿人", value: "reviewer" },
-];
+const CHAT_MODE_OPTIONS = CHAT_MODES.map((m) => ({ label: m.label, value: m.value }));
 
 interface Props {
   topicId: number;
@@ -51,6 +47,16 @@ export default function ChatPanel({ topicId }: Props) {
     queryKey: ["chat-sessions", topicId],
     queryFn: () => listSessions(topicId),
   });
+
+  // Latest memory summary across topic — used to render "已记忆 N 轮" badge.
+  // refetch every 20s so the badge ticks after Celery summarization lands.
+  const memoryQ = useQuery({
+    queryKey: ["chat-memory", topicId],
+    queryFn: () => listChatMemory(topicId, 1),
+    refetchInterval: 20_000,
+  });
+  const latestMemory = memoryQ.data?.[0];
+  const memoryCount = latestMemory?.message_count_at_gen ?? 0;
 
   useEffect(() => {
     if (!activeSessionId && sessionsQ.data && sessionsQ.data.length > 0) {
@@ -241,23 +247,37 @@ export default function ChatPanel({ topicId }: Props) {
             gap: 8,
           }}
         >
-          <Segmented
-            size="small"
-            options={CHAT_MODE_OPTIONS}
-            value={currentMode}
-            onChange={(v) => modeMut.mutate(v as ChatMode)}
-            disabled={!activeSessionId || streaming}
-            data-testid="chat-mode-selector"
-          />
-          <Tooltip title="查看长期记忆（自动总结的会话摘要）">
+          <Tooltip title={CHAT_MODE_DESC[currentMode as ChatMode] ?? CHAT_MODE_DESC.default}>
+            <Segmented
+              size="small"
+              options={CHAT_MODE_OPTIONS}
+              value={currentMode}
+              onChange={(v) => modeMut.mutate(v as ChatMode)}
+              disabled={!activeSessionId || streaming}
+              data-testid="chat-mode-selector"
+            />
+          </Tooltip>
+          <Tooltip
+            title={
+              memoryCount > 0
+                ? `已基于最近 ${memoryCount} 条消息生成长期记忆`
+                : "暂未生成长期记忆 — 多聊几轮后会自动总结"
+            }
+          >
             <Button
               size="small"
               type="text"
               icon={<HistoryOutlined />}
               onClick={() => setMemoryOpen(true)}
               data-testid="chat-memory-btn"
+              style={{
+                fontFamily: "var(--font-mono)",
+                fontSize: 11,
+                letterSpacing: "0.05em",
+                color: memoryCount > 0 ? "var(--accent)" : "var(--text-tertiary)",
+              }}
             >
-              记忆
+              {memoryCount > 0 ? `🧠 已记忆 ${memoryCount} 轮` : "🧠 记忆"}
             </Button>
           </Tooltip>
         </div>

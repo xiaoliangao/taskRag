@@ -155,16 +155,44 @@ async def _gather_user_research_context(
         return ""
 
 
+_SUMMARY_DISPATCH_TTL_S = 60  # min seconds between two summarize dispatches per session
+
+
 def _maybe_dispatch_summary(db: AsyncSession, session_id: int) -> None:
-    """Fire-and-forget Celery summarization. Cheap; runs only when threshold hit."""
+    """Fire-and-forget Celery summarization, throttled with a Redis lock.
+
+    Without throttling, every chat turn enqueues a Celery message that
+    short-circuits inside `needs_resummary` — wasteful at scale. We hold a
+    `mem:dispatch:{sid}` lock with `SETNX` for 60s so back-to-back turns
+    coalesce into one job. The Celery task still re-checks `needs_resummary`,
+    which is the real correctness gate; this is purely a noise reduction.
+    """
     try:
         from app.tasks.research_tasks import summarize_chat_session_task
 
+        if _should_skip_summary_dispatch(session_id):
+            return
         summarize_chat_session_task.apply_async(
             kwargs={"session_id": session_id}, queue="intelligence"
         )
     except Exception:  # pragma: no cover - dispatch best-effort
         pass
+
+
+def _should_skip_summary_dispatch(session_id: int) -> bool:
+    """True when a dispatch happened for this session within the TTL window."""
+    try:
+        import redis
+
+        cli = redis.Redis.from_url(get_settings().redis_url, decode_responses=True)
+        # SET key value NX EX ttl → returns True only if the key did not exist.
+        acquired = cli.set(
+            f"mem:dispatch:{session_id}", "1", nx=True, ex=_SUMMARY_DISPATCH_TTL_S
+        )
+        return not acquired
+    except Exception:
+        # If Redis is unhappy we'd rather dispatch (correct but noisy) than miss.
+        return False
 
 
 async def answer_nonstream(
