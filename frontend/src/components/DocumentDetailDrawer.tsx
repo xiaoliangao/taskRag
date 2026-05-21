@@ -68,7 +68,7 @@ export default function DocumentDetailDrawer({ topicId, documentId, open, onClos
     <Drawer
       open={open}
       onClose={onClose}
-      width={1080}
+      width="92vw"
       destroyOnClose
       title={
         data ? (

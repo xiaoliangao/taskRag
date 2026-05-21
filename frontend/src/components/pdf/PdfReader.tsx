@@ -1,5 +1,11 @@
-import { App } from "antd";
-import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  CompressOutlined,
+  ExpandOutlined,
+  MinusOutlined,
+  PlusOutlined,
+} from "@ant-design/icons";
+import { App, Button, Tooltip } from "antd";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Document, Page, pdfjs } from "react-pdf";
 import type { PDFDocumentProxy } from "pdfjs-dist";
 
@@ -60,6 +66,32 @@ export default function PdfReader({ topicId, documentId, pdfUrl }: Props) {
   const pagesContainerRef = useRef<HTMLDivElement>(null);
   // page_number → DOM node, used for jump-to-page from sidebar.
   const pageNodes = useRef<Record<number, HTMLDivElement>>({});
+
+  // Zoom factor applied on top of the fit-to-width base width. 1.0 = "as wide
+  // as the scroll container can hold". Range 0.6–2.0 keeps things sane.
+  const [zoom, setZoom] = useState(1.0);
+  // Measured width of the scroll container (minus its horizontal padding),
+  // recalculated on resize so the page tracks the drawer size.
+  const [containerWidth, setContainerWidth] = useState<number>(900);
+
+  useLayoutEffect(() => {
+    const el = pagesContainerRef.current;
+    if (!el) return;
+    const compute = () => {
+      // Subtract the container's own horizontal padding so the page doesn't
+      // overflow into the gutter.
+      const cs = window.getComputedStyle(el);
+      const pad =
+        parseFloat(cs.paddingLeft || "0") + parseFloat(cs.paddingRight || "0");
+      setContainerWidth(Math.max(320, el.clientWidth - pad - 8));
+    };
+    compute();
+    const ro = new ResizeObserver(compute);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
+  const pageWidth = Math.round(containerWidth * zoom);
 
   // Initial load + when document changes.
   useEffect(() => {
@@ -164,7 +196,63 @@ export default function PdfReader({ topicId, documentId, pdfUrl }: Props) {
   }, [annotations]);
 
   return (
-    <div style={{ display: "flex", height: "100%", minHeight: 0 }}>
+    <div style={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0 }}>
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 6,
+          padding: "6px 12px",
+          borderBottom: "1px solid var(--border-subtle)",
+          background: "var(--bg-surface)",
+          fontFamily: "var(--font-mono)",
+          fontSize: 11,
+          color: "var(--text-tertiary)",
+        }}
+      >
+        <Tooltip title="缩小">
+          <Button
+            size="small"
+            type="text"
+            icon={<MinusOutlined />}
+            disabled={zoom <= 0.6}
+            onClick={() => setZoom((z) => Math.max(0.6, +(z - 0.1).toFixed(2)))}
+          />
+        </Tooltip>
+        <span style={{ minWidth: 44, textAlign: "center" }}>
+          {Math.round(zoom * 100)}%
+        </span>
+        <Tooltip title="放大">
+          <Button
+            size="small"
+            type="text"
+            icon={<PlusOutlined />}
+            disabled={zoom >= 2.0}
+            onClick={() => setZoom((z) => Math.min(2.0, +(z + 0.1).toFixed(2)))}
+          />
+        </Tooltip>
+        <Tooltip title="贴合宽度">
+          <Button
+            size="small"
+            type="text"
+            icon={<CompressOutlined />}
+            onClick={() => setZoom(1.0)}
+          />
+        </Tooltip>
+        <Tooltip title="放大到 130%">
+          <Button
+            size="small"
+            type="text"
+            icon={<ExpandOutlined />}
+            onClick={() => setZoom(1.3)}
+          />
+        </Tooltip>
+        <span style={{ marginLeft: "auto" }}>
+          共 {numPages || "—"} 页 · 选中正文文字即可标注
+        </span>
+      </div>
+
+      <div style={{ display: "flex", flex: 1, minHeight: 0 }}>
       <div
         ref={pagesContainerRef}
         style={{
@@ -207,7 +295,7 @@ export default function PdfReader({ topicId, documentId, pdfUrl }: Props) {
                 pageNumber={pn}
                 renderTextLayer
                 renderAnnotationLayer={false}
-                width={760}
+                width={pageWidth}
               />
               {(annotationsByPage[pn] || []).map((a) =>
                 a.rects.map((r, i) => (
@@ -244,6 +332,7 @@ export default function PdfReader({ topicId, documentId, pdfUrl }: Props) {
         onJump={handleJump}
         onDelete={handleDelete}
       />
+      </div>
     </div>
   );
 }
