@@ -75,6 +75,12 @@ class Settings(BaseSettings):
     email_from: str = ""
     initial_admin_email: str = ""  # bootstrap: matching user promoted to admin on startup
 
+    # DeepLX self-hosted translation proxy. Endpoint should accept
+    # POST {base}/translate body {text, source_lang, target_lang}.
+    # Empty disables translation feature; UI hides the button gracefully.
+    deeplx_base_url: str = ""
+    deeplx_access_token: str = ""  # optional bearer token if your instance requires one
+
     # Source API keys
     github_token: str = ""
     semantic_scholar_api_key: str = ""

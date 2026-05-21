@@ -35,6 +35,10 @@ from app.api.routes import annotations as _annotations_route  # noqa: E402
 
 api_router.include_router(_annotations_route.router, tags=["annotations"])
 
+from app.api.routes import translation as _translation_route  # noqa: E402
+
+api_router.include_router(_translation_route.router, prefix="/translate", tags=["translate"])
+
 # v1.1+ intelligence layer (added as each module is implemented)
 try:
     from app.api.routes import pulses  # noqa: F401

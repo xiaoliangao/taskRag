@@ -1,20 +1,29 @@
-import { HighlightOutlined, MessageOutlined, StarOutlined } from "@ant-design/icons";
+import {
+  HighlightOutlined,
+  MessageOutlined,
+  StarOutlined,
+  TranslationOutlined,
+} from "@ant-design/icons";
 import { Button, Space, Tooltip } from "antd";
 
 import type { AnnotationKind } from "../../api/annotations";
 
-/** Floating popover that appears anchored to a text selection. Three actions
- *  map to the three annotation kinds the backend supports. */
+export type ToolbarAction = AnnotationKind | "translate";
+
+/** Floating popover anchored to a text selection. Four actions: three create
+ *  annotations of the corresponding `kind`, the fourth fires translation. */
 export default function SelectionToolbar({
   visible,
   anchorRect,
   onPick,
   busy,
+  translateEnabled,
 }: {
   visible: boolean;
   anchorRect: { left: number; top: number; width: number } | null;
-  onPick: (kind: AnnotationKind) => void;
+  onPick: (action: ToolbarAction) => void;
   busy?: boolean;
+  translateEnabled?: boolean;
 }) {
   if (!visible || !anchorRect) return null;
   return (
@@ -64,6 +73,17 @@ export default function SelectionToolbar({
             onClick={() => onPick("note")}
           />
         </Tooltip>
+        {translateEnabled && (
+          <Tooltip title="翻译(中↔英)">
+            <Button
+              type="text"
+              size="small"
+              disabled={busy}
+              icon={<TranslationOutlined style={{ color: "var(--info)" }} />}
+              onClick={() => onPick("translate")}
+            />
+          </Tooltip>
+        )}
       </Space>
     </div>
   );

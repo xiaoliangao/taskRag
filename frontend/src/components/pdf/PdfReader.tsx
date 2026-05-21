@@ -20,8 +20,9 @@ import {
   listAnnotations,
 } from "../../api/annotations";
 import { apiErrorMessage } from "../../api/client";
+import { translateStatus, translateText } from "../../api/translate";
 import AnnotationSidebar from "./AnnotationSidebar";
-import SelectionToolbar from "./SelectionToolbar";
+import SelectionToolbar, { type ToolbarAction } from "./SelectionToolbar";
 
 // Wire pdfjs worker through Vite. The `new URL(...)` form is Vite-native and
 // produces a hashed worker bundle at build time without runtime CDN lookups.
@@ -62,6 +63,18 @@ export default function PdfReader({ topicId, documentId, pdfUrl }: Props) {
   const [numPages, setNumPages] = useState(0);
   const [pending, setPending] = useState<PendingSelection | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [translateEnabled, setTranslateEnabled] = useState(false);
+  // When set, render a popover below the selection with the translated text.
+  const [translation, setTranslation] = useState<
+    | {
+        sourceText: string;
+        translated: string;
+        targetLang: string;
+        anchor: { left: number; top: number; width: number };
+      }
+    | null
+  >(null);
+  const [translating, setTranslating] = useState(false);
 
   const pagesContainerRef = useRef<HTMLDivElement>(null);
   // page_number → DOM node, used for jump-to-page from sidebar.
@@ -99,6 +112,20 @@ export default function PdfReader({ topicId, documentId, pdfUrl }: Props) {
       .then(setAnnotations)
       .catch(() => setAnnotations([]));
   }, [topicId, documentId]);
+
+  // One-off check whether DeepLX is configured server-side. Hides the
+  // "翻译" toolbar button when not, so the user doesn't get 503s.
+  useEffect(() => {
+    let cancelled = false;
+    translateStatus()
+      .then((s) => {
+        if (!cancelled) setTranslateEnabled(s.enabled);
+      })
+      .catch(() => setTranslateEnabled(false));
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const onDocLoad = ({ numPages: n }: PDFDocumentProxy) => setNumPages(n);
 
@@ -148,8 +175,31 @@ export default function PdfReader({ topicId, documentId, pdfUrl }: Props) {
     window.getSelection()?.removeAllRanges();
   };
 
-  const handlePick = async (kind: AnnotationKind) => {
+  const handlePick = async (action: ToolbarAction) => {
     if (!pending) return;
+    if (action === "translate") {
+      // Translation is non-destructive — we keep the selection state so the
+      // user can also annotate after seeing the translation. Anchor saved
+      // before we await so a layout shift doesn't move the popover.
+      const anchor = { ...pending.toolbar };
+      const sourceText = pending.selected_text;
+      setTranslating(true);
+      try {
+        const r = await translateText(sourceText);
+        setTranslation({
+          sourceText,
+          translated: r.text,
+          targetLang: r.target_lang,
+          anchor,
+        });
+      } catch (e) {
+        message.error(apiErrorMessage(e));
+      } finally {
+        setTranslating(false);
+      }
+      return;
+    }
+    const kind = action;
     setSubmitting(true);
     try {
       const created = await createAnnotation(topicId, documentId, {
@@ -324,8 +374,68 @@ export default function PdfReader({ topicId, documentId, pdfUrl }: Props) {
         visible={!!pending}
         anchorRect={pending?.toolbar ?? null}
         onPick={handlePick}
-        busy={submitting}
+        busy={submitting || translating}
+        translateEnabled={translateEnabled}
       />
+
+      {translation && (
+        <div
+          // Position below the original selection. fixed positioning matches
+          // the toolbar so they share an anchor frame even on scroll.
+          style={{
+            position: "fixed",
+            left: Math.max(12, translation.anchor.left + translation.anchor.width / 2 - 240),
+            top: translation.anchor.top + 28,
+            width: 480,
+            maxWidth: "calc(100vw - 24px)",
+            background: "var(--bg-elevated)",
+            border: "1px solid var(--border-default)",
+            borderRadius: "var(--radius-md)",
+            boxShadow: "var(--shadow-3)",
+            padding: "12px 14px",
+            zIndex: 2001,
+          }}
+          onMouseDown={(e) => e.stopPropagation()}
+        >
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              marginBottom: 8,
+            }}
+          >
+            <span
+              style={{
+                fontFamily: "var(--font-mono)",
+                fontSize: 10,
+                letterSpacing: "0.1em",
+                textTransform: "uppercase",
+                color: "var(--text-tertiary)",
+              }}
+            >
+              翻译 → {translation.targetLang}
+            </span>
+            <Button
+              size="small"
+              type="text"
+              onClick={() => setTranslation(null)}
+            >
+              ✕
+            </Button>
+          </div>
+          <div
+            style={{
+              fontSize: 13.5,
+              lineHeight: 1.6,
+              color: "var(--text-primary)",
+              whiteSpace: "pre-wrap",
+            }}
+          >
+            {translation.translated}
+          </div>
+        </div>
+      )}
 
       <AnnotationSidebar
         annotations={annotations}
