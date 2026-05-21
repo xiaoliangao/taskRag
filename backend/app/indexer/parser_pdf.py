@@ -37,9 +37,13 @@ _PARSE_TIMEOUT_S = 60
 _MAX_PAGES = 80
 
 
-def parse_pdf(pdf_path: Path) -> ParsedPdf | None:
-    """Parse a PDF with a hard timeout. Returns None on failure or timeout
-    so the caller can fall back to abstract-only indexing."""
+def parse_pdf(pdf_path: Path, content_hash: str | None = None) -> ParsedPdf | None:
+    """Parse a PDF via PyMuPDF with a hard timeout. Returns None on failure or
+    timeout so the caller can fall back to abstract-only indexing.
+
+    `content_hash` is accepted for forward-compat with callers that pass it,
+    but is currently unused.
+    """
     import concurrent.futures
 
     if not pdf_path.exists():
@@ -48,9 +52,18 @@ def parse_pdf(pdf_path: Path) -> ParsedPdf | None:
     with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
         future = pool.submit(_parse_pdf_impl, pdf_path)
         try:
-            return future.result(timeout=_PARSE_TIMEOUT_S)
+            result = future.result(timeout=_PARSE_TIMEOUT_S)
+            if result is not None:
+                log.info(
+                    "parser=pymupdf sections=%d for %s",
+                    len(result.sections), pdf_path.name,
+                )
+            return result
         except concurrent.futures.TimeoutError:
-            log.warning("PDF parse timed out after %ds for %s — falling back to abstract", _PARSE_TIMEOUT_S, pdf_path)
+            log.warning(
+                "PDF parse timed out after %ds for %s — falling back to abstract",
+                _PARSE_TIMEOUT_S, pdf_path,
+            )
             return None
         except Exception as exc:
             log.warning("PDF parse failed for %s: %s", pdf_path, exc)
