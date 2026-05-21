@@ -453,7 +453,7 @@ export interface HypothesisCheckSummary {
   finished_at: string | null;
 }
 
-export type ChatMode = "default" | "mentor" | "beginner" | "debate" | "reviewer";
+export type ChatMode = "default" | "mentor" | "beginner" | "debate" | "reviewer" | "what_if";
 
 // --- v1.3 Sprint 4: Comparison + Writing ---
 

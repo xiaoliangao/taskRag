@@ -11,6 +11,7 @@ import {
   Segmented,
   Skeleton,
   Tag,
+  Tooltip,
   Typography,
 } from "antd";
 import { useMutation, useQuery } from "@tanstack/react-query";
@@ -20,6 +21,8 @@ import { runAgent, type AgentResponse } from "../api/agent";
 import { apiErrorMessage } from "../api/client";
 import { crossTopicQA, type CrossTopicCitation } from "../api/cross_topic";
 import { listTopics } from "../api/topics";
+import type { ChatMode } from "../types/api";
+import { CHAT_MODES, CHAT_MODE_DESC } from "../utils/chatModes";
 import MarkdownView from "../components/MarkdownView";
 
 const TOPIC_COLORS = [
@@ -59,6 +62,7 @@ export default function CrossTopicChatPage() {
   const [history, setHistory] = useState<QAResult[]>([]);
   const [agentHistory, setAgentHistory] = useState<AgentResult[]>([]);
   const [mode, setMode] = useState<"qa" | "agent">("qa");
+  const [chatMode, setChatMode] = useState<ChatMode>("default");
 
   const topicsQ = useQuery({
     queryKey: ["topics-cross"],
@@ -76,7 +80,7 @@ export default function CrossTopicChatPage() {
       crossTopicQA({
         topic_ids: selected,
         question: draft.trim(),
-        mode: "default",
+        mode: chatMode,
       }),
     onSuccess: (data) => {
       setHistory((h) => [
@@ -184,7 +188,7 @@ export default function CrossTopicChatPage() {
         )}
       </div>
 
-      <div style={{ marginBottom: 12 }}>
+      <div style={{ marginBottom: 12, display: "flex", flexWrap: "wrap", gap: 12, alignItems: "center" }}>
         <Segmented
           value={mode}
           onChange={(v) => setMode(v as "qa" | "agent")}
@@ -193,8 +197,18 @@ export default function CrossTopicChatPage() {
             { label: "Agent 模式", value: "agent", icon: <RobotOutlined /> },
           ]}
         />
+        {mode === "qa" && (
+          <Tooltip title={CHAT_MODE_DESC[chatMode]}>
+            <Segmented
+              size="small"
+              value={chatMode}
+              onChange={(v) => setChatMode(v as ChatMode)}
+              options={CHAT_MODES.map((m) => ({ label: m.label, value: m.value }))}
+            />
+          </Tooltip>
+        )}
         <span
-          style={{ marginLeft: 12, fontSize: 11, color: "var(--text-tertiary)" }}
+          style={{ marginLeft: "auto", fontSize: 11, color: "var(--text-tertiary)" }}
         >
           {mode === "qa"
             ? "一次性检索 + 生成回答"

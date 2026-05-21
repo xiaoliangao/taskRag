@@ -1,7 +1,7 @@
 """Chat mode prompt hints (Sprint 3)."""
 from __future__ import annotations
 
-CHAT_MODES = ("default", "mentor", "beginner", "debate", "reviewer")
+CHAT_MODES = ("default", "mentor", "beginner", "debate", "reviewer", "what_if")
 
 CHAT_MODE_SYSTEM_HINTS: dict[str, str] = {
     "default": "保持准确、基于引用回答。回答优先结构化：结论、关键依据、相关文档。",
@@ -28,6 +28,14 @@ CHAT_MODE_SYSTEM_HINTS: dict[str, str] = {
         "（1）方法贡献是否充分；（2）实验是否能支撑结论；"
         "（3）局限与潜在威胁；（4）改进建议。"
         "严格但不刻薄，禁止用 \"X 错了\" 这类绝对判定。"
+    ),
+    "what_if": (
+        "你以反事实假设的视角回答。把 USER_QUESTION 视作一个 \"如果 X 成立则…\" 的探问："
+        "（1）先明确写出当前文献的现状基线；"
+        "（2）列出 2-4 条 \"如果改变 X → 会推动 Y\" 的推理链，每条注明该推理建立在哪条 CONTEXT 上；"
+        "（3）标出推理中最薄弱的假设；"
+        "（4）建议 1-2 个能证伪该假设的最小实验。"
+        "禁止把推测说成已被验证的结论。"
     ),
 }
 
