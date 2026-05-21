@@ -1,16 +1,22 @@
 import { ReloadOutlined } from "@ant-design/icons";
-import { App, Button, Empty, Skeleton } from "antd";
+import { App, Button, Empty, Skeleton, Tooltip } from "antd";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import dayjs from "dayjs";
+import { useMemo } from "react";
 import MarkdownView from "./MarkdownView";
 
 import { generatePulse, getLatestPulse } from "../api/intel";
 import { apiErrorMessage } from "../api/client";
+import { listSignals } from "../api/signals";
 
 interface Props {
   topicId: number;
   onJumpDocument?: (docId: number) => void;
 }
+
+/** Threshold matches `_BREAKTHROUGH_THRESHOLD` in signal_service.py. Doc IDs at
+ *  or above this score get the 🔥 badge on Pulse rows. */
+const BREAKTHROUGH_FLOOR = 0.65;
 
 export default function PulseCard({ topicId, onJumpDocument }: Props) {
   const qc = useQueryClient();
@@ -21,6 +27,53 @@ export default function PulseCard({ topicId, onJumpDocument }: Props) {
     queryFn: () => getLatestPulse(topicId),
     refetchInterval: 30_000,
   });
+
+  const signalsQ = useQuery({
+    queryKey: ["signals-breakthrough", topicId],
+    queryFn: () => listSignals(topicId, { signal_type: "breakthrough_candidate", limit: 50 }),
+    refetchInterval: 60_000,
+  });
+
+  // doc_id → reason. Only includes breakthrough_candidate signals at or above
+  // the floor; the backend can also emit "high_relevance" which we ignore here.
+  const breakthroughByDoc = useMemo(() => {
+    const m = new Map<number, string>();
+    for (const s of signalsQ.data ?? []) {
+      if (s.score >= BREAKTHROUGH_FLOOR) {
+        m.set(s.document_id, s.reason_md || "突破信号");
+      }
+    }
+    return m;
+  }, [signalsQ.data]);
+
+  const BreakthroughBadge = ({ docId }: { docId: number | null }) => {
+    if (docId == null) return null;
+    const reason = breakthroughByDoc.get(docId);
+    if (!reason) return null;
+    return (
+      <Tooltip title={reason}>
+        <span
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 4,
+            padding: "1px 7px",
+            marginLeft: 8,
+            background: "rgba(255,122,107,0.14)",
+            border: "1px solid rgba(255,122,107,0.4)",
+            borderRadius: 999,
+            fontFamily: "var(--font-mono)",
+            fontSize: 10,
+            letterSpacing: "0.05em",
+            color: "var(--danger)",
+            verticalAlign: "middle",
+          }}
+        >
+          🔥 突破
+        </span>
+      </Tooltip>
+    );
+  };
 
   const mut = useMutation({
     mutationFn: () => generatePulse(topicId),
@@ -122,6 +175,7 @@ export default function PulseCard({ topicId, onJumpDocument }: Props) {
                           onClick={() => d.document_id && onJumpDocument?.(d.document_id)}
                         >
                           {d.title}
+                          <BreakthroughBadge docId={d.document_id ?? null} />
                         </div>
                         {d.reason && <div className="pulse-doc-reason">{d.reason}</div>}
                       </div>
@@ -251,6 +305,7 @@ export default function PulseCard({ topicId, onJumpDocument }: Props) {
                   }
                 >
                   {d.title}
+                  <BreakthroughBadge docId={d.document_id ?? null} />
                 </span>
               </div>
             ))}
