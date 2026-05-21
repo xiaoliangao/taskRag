@@ -17,7 +17,7 @@ from pydantic import BaseModel, Field
 
 from app.api.deps import CurrentUserDep, SessionDep
 from app.core.config import get_settings
-from app.core.constants import CollectionTrigger, SourceType
+from app.core.constants import CollectionTrigger
 from app.core.errors import NotFoundError, ValidationError
 from app.db.repositories.task_repo import CollectionTaskRepository
 from app.db.repositories.topic_repo import TopicRepository
@@ -30,7 +30,18 @@ log = logging.getLogger(__name__)
 router = APIRouter()
 
 
-_ALLOWED_SOURCES = sorted(s.value for s in SourceType)
+# Only collectors that implement an ad-hoc `.search(keywords, since, max_results)`
+# belong here. Upload sources (PDF / URL) and feed sources (RSS, github watch)
+# don't run query-style searches.
+_SEARCHABLE_SOURCES = ("arxiv", "openalex", "semantic_scholar")
+
+
+def _has_cjk(text: str) -> bool:
+    """True if the query contains any CJK character. arxiv's full-text search
+    only indexes English titles/abstracts; querying it with Chinese wastes the
+    35s timeout, so we deprioritise it (run OpenAlex / SS first) when CJK is
+    present."""
+    return any("一" <= ch <= "鿿" for ch in (text or ""))
 
 
 class DiscoverSearchRequest(BaseModel):
@@ -67,10 +78,21 @@ async def discover_search_route(
     body: DiscoverSearchRequest, _user: CurrentUserDep
 ) -> DiscoverSearchResponse:
     keywords = [k.strip() for k in body.query.split(",") if k.strip()] or [body.query.strip()]
-    sources = [s for s in body.sources if s in _ALLOWED_SOURCES]
+    requested = [s for s in body.sources if s in _SEARCHABLE_SOURCES]
+    if requested:
+        ordered_sources = requested
+    elif _has_cjk(body.query):
+        # CJK query: skip arxiv direct (English-only full-text → 35s timeout
+        # for nothing). OpenAlex/SS index DOI metadata covering Chinese-titled
+        # papers; arxiv preprints that match still surface via OpenAlex's
+        # arxiv_id fallback in the OpenAlex collector.
+        ordered_sources = ["openalex", "semantic_scholar"]
+    else:
+        ordered_sources = list(_SEARCHABLE_SOURCES)
+
     docs, rate_limited = discover_search(
         keywords=keywords,
-        sources=sources or None,
+        sources=ordered_sources,
         limit=body.limit,
         days=body.days,
     )
@@ -93,7 +115,7 @@ async def discover_search_route(
     return DiscoverSearchResponse(
         items=items,
         rate_limited_sources=rate_limited,
-        sources_queried=sources or list(_ALLOWED_SOURCES),
+        sources_queried=ordered_sources,
     )
 
 
