@@ -72,6 +72,12 @@ class Chunk(Base):
         BigInteger, ForeignKey("chunks.id", ondelete="SET NULL"), nullable=True
     )
     is_parent: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    # LLM-generated situating context (Wave-3 Pkg-CR). For child chunks, this
+    # is the one-line "what does this section discuss" summary derived from
+    # the parent; we prepend it to chunk.text before embedding so the vector
+    # carries the surrounding section's framing. NULL for parents and for
+    # legacy chunks ingested before this feature shipped.
+    context_summary: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

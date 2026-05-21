@@ -220,9 +220,34 @@ def ingest_raw_document(
         # Flush so parent rows acquire ids before we wire children to them.
         db.flush()
 
+    # Contextual Retrieval (Wave-3 Pkg-CR): generate a one-sentence situating
+    # context per parent, then embed children with `<context>\n<chunk>` so the
+    # vector carries section framing. One LLM call per parent (cheap); the raw
+    # chunk text in DB and BM25 is unaffected.
+    from app.services.contextual_retrieval import (
+        compose_embedding_text,
+        generate_contexts_by_parent_idx,
+    )
+
+    parent_idx_to_context: dict[int, str] = {}
+    if parent_chunks:
+        try:
+            parent_idx_to_context = generate_contexts_by_parent_idx(
+                document_title=document.title or "",
+                parent_chunks=parent_chunks,
+            )
+        except Exception as exc:
+            log.warning("contextual retrieval batch failed for doc %s: %s", document.id, exc)
+
     embedder = get_embedder()
-    child_texts = [c.text for c in child_chunks]
-    vectors = embedder.embed_texts(child_texts) if child_texts else []
+    child_embedding_inputs = [
+        compose_embedding_text(
+            c.text,
+            parent_idx_to_context.get(c.parent_chunk_index) if c.parent_chunk_index is not None else None,
+        )
+        for c in child_chunks
+    ]
+    vectors = embedder.embed_texts(child_embedding_inputs) if child_embedding_inputs else []
 
     chunk_rows: list[Chunk] = list(parent_idx_to_row.values())
     points: list[dict] = []
@@ -233,6 +258,11 @@ def ingest_raw_document(
             if c.parent_chunk_index is not None
             else None
         )
+        ctx_summary = (
+            parent_idx_to_context.get(c.parent_chunk_index)
+            if c.parent_chunk_index is not None
+            else None
+        ) or None  # store NULL instead of empty string for consistency
         row = Chunk(
             document_id=document.id,
             chunk_index=c.chunk_index,
@@ -244,6 +274,7 @@ def ingest_raw_document(
             vector_id=vid,
             is_parent=False,
             parent_id=parent_row.id if parent_row is not None else None,
+            context_summary=ctx_summary,
         )
         db.add(row)
         chunk_rows.append(row)
