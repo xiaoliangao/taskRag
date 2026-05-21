@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 
 import { getDocument, getDocumentPdfBlobUrl } from "../api/documents";
 import BriefingPanel from "./BriefingPanel";
+import PdfReader from "./pdf/PdfReader";
 
 interface Props {
   topicId: number;
@@ -212,16 +213,11 @@ export default function DocumentDetailDrawer({ topicId, documentId, open, onClos
                         }
                         style={{ margin: 16 }}
                       />
-                    ) : pdfUrl ? (
-                      <iframe
-                        title={data.title}
-                        src={pdfUrl}
-                        style={{
-                          width: "100%",
-                          height: "100%",
-                          border: 0,
-                          background: "white",
-                        }}
+                    ) : pdfUrl && documentId != null ? (
+                      <PdfReader
+                        topicId={topicId}
+                        documentId={documentId}
+                        pdfUrl={pdfUrl}
                       />
                     ) : null}
                   </div>
