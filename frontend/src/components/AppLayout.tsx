@@ -2,6 +2,7 @@ import {
   AppstoreOutlined,
   BellOutlined,
   ClusterOutlined,
+  CompassOutlined,
   CrownOutlined,
   HeartOutlined,
   LogoutOutlined,
@@ -73,6 +74,7 @@ export default function AppLayout() {
   };
 
   const isTopicListActive = location.pathname === "/topics" || location.pathname === "/";
+  const isDiscoverActive = location.pathname.startsWith("/discover");
   const isCrossTopicActive = location.pathname.startsWith("/qa/cross-topic");
   const isNotificationsActive = location.pathname.startsWith("/notifications");
   const isSettingsActive = location.pathname.startsWith("/settings");
@@ -113,6 +115,13 @@ export default function AppLayout() {
 
         <div className="nav-section">
           <div className="nav-label">主菜单</div>
+          <div
+            className={`nav-item ${isDiscoverActive ? "active" : ""}`}
+            onClick={() => navigate("/discover")}
+          >
+            <CompassOutlined />
+            <span>全局检索</span>
+          </div>
           <div
             className={`nav-item ${isTopicListActive ? "active" : ""}`}
             onClick={() => navigate("/topics")}
