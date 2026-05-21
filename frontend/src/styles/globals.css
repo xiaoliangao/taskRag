@@ -760,6 +760,32 @@ a:hover {
   flex-wrap: wrap;
 }
 
+/* Flex-fill Tabs — when a parent uses display:flex column on the Tabs root
+   with flex:1, antd's nested .ant-tabs-content / .ant-tabs-tabpane must also
+   stretch or the tab body collapses to its intrinsic size (which kills the
+   PDF reader inside the document drawer). */
+.ant-tabs[style*="flex: 1"] > .ant-tabs-content-holder,
+.ant-tabs[style*="flex:1"] > .ant-tabs-content-holder {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.ant-tabs[style*="flex: 1"] > .ant-tabs-content-holder > .ant-tabs-content,
+.ant-tabs[style*="flex:1"] > .ant-tabs-content-holder > .ant-tabs-content {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.ant-tabs[style*="flex: 1"] > .ant-tabs-content-holder > .ant-tabs-content > .ant-tabs-tabpane,
+.ant-tabs[style*="flex:1"] > .ant-tabs-content-holder > .ant-tabs-content > .ant-tabs-tabpane {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
 /* Page heading */
 .page-eyebrow {
   font-family: var(--font-mono);

@@ -70,6 +70,17 @@ export default function DocumentDetailDrawer({ topicId, documentId, open, onClos
       onClose={onClose}
       width="92vw"
       destroyOnClose
+      styles={{
+        // Flex column so the Tabs panel can stretch to fill the remaining
+        // height — gives the PDF tab room to breathe instead of the previous
+        // calc(100vh - 360px) cap.
+        body: {
+          padding: 16,
+          display: "flex",
+          flexDirection: "column",
+          minHeight: 0,
+        },
+      }}
       title={
         data ? (
           <div>
@@ -129,54 +140,45 @@ export default function DocumentDetailDrawer({ topicId, documentId, open, onClos
       {isLoading || !data ? (
         <Skeleton active />
       ) : (
-        <>
-          {/* Metadata */}
+        <div style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
+          {/* Metadata — compact one-line layout so it doesn't steal PDF height */}
           <div
             style={{
               background: "var(--bg-surface)",
               border: "1px solid var(--border-subtle)",
               borderRadius: "var(--radius-md)",
-              padding: "16px 20px",
-              marginBottom: 18,
+              padding: "8px 14px",
+              marginBottom: 8,
+              display: "flex",
+              flexWrap: "wrap",
+              gap: 18,
+              alignItems: "center",
+              fontSize: 12,
             }}
           >
-            <div className="doc-meta-row">
-              <div className="doc-meta-label">authors</div>
-              <div style={{ color: "var(--text-primary)" }}>
-                {(data.authors || []).join(", ") || "—"}
-              </div>
-            </div>
-            <div className="doc-meta-row">
-              <div className="doc-meta-label">published</div>
-              <div
-                style={{
-                  fontFamily: "var(--font-mono)",
-                  fontSize: 12.5,
-                  color: "var(--text-secondary)",
-                }}
-              >
-                {data.published_at
-                  ? dayjs(data.published_at).format("YYYY-MM-DD")
-                  : "—"}
-              </div>
-            </div>
-            <div className="doc-meta-row">
-              <div className="doc-meta-label">source</div>
-              <div>
-                <a
-                  href={data.url}
-                  target="_blank"
-                  rel="noreferrer"
-                  style={{ color: "var(--accent)", fontFamily: "var(--font-mono)", fontSize: 12 }}
-                >
-                  <LinkOutlined /> 跳转原文
-                </a>
-              </div>
-            </div>
+            <span className="doc-meta-label">authors</span>
+            <span style={{ color: "var(--text-primary)", flex: 1, minWidth: 200 }}>
+              {(data.authors || []).slice(0, 4).join(", ") || "—"}
+              {(data.authors || []).length > 4 ? " 等" : ""}
+            </span>
+            <span className="doc-meta-label">published</span>
+            <span style={{ fontFamily: "var(--font-mono)", color: "var(--text-secondary)" }}>
+              {data.published_at ? dayjs(data.published_at).format("YYYY-MM-DD") : "—"}
+            </span>
+            <a
+              href={data.url}
+              target="_blank"
+              rel="noreferrer"
+              style={{ color: "var(--accent)", fontFamily: "var(--font-mono)" }}
+            >
+              <LinkOutlined /> 跳转原文
+            </a>
           </div>
 
           <Tabs
             defaultActiveKey="briefing"
+            style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}
+            tabBarStyle={{ marginBottom: 8 }}
             items={[
               {
                 key: "briefing",
@@ -191,12 +193,18 @@ export default function DocumentDetailDrawer({ topicId, documentId, open, onClos
                 children: (
                   <div
                     style={{
-                      height: "calc(100vh - 360px)",
+                      // Fills the remaining tab-panel height. With the Drawer
+                      // body laid out as a flex column above, this means the
+                      // PDF takes ~100vh − (header + metadata + tab bar) ≈
+                      // 100vh − 200px on a typical viewport.
+                      flex: 1,
                       minHeight: 520,
                       border: "1px solid var(--border-subtle)",
                       borderRadius: "var(--radius-md)",
                       overflow: "hidden",
                       background: "var(--bg-canvas)",
+                      display: "flex",
+                      flexDirection: "column",
                     }}
                   >
                     {pdfLoading ? (
@@ -225,7 +233,7 @@ export default function DocumentDetailDrawer({ topicId, documentId, open, onClos
               },
             ]}
           />
-        </>
+        </div>
       )}
     </Drawer>
   );
