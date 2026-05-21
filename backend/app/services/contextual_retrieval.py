@@ -27,24 +27,50 @@ from app.rag.llm_client import get_llm_client
 log = logging.getLogger(__name__)
 
 
-_SYSTEM = """你是一个研究助手。给定一段学术论文的内容(标题 + 章节段落),
-输出一句话(英文 ≤ 35 词,中文 ≤ 60 字)简短描述该段落在论文中讨论的主题
-及其角色。
+_SYSTEM_EN = """You will receive a paper title, a section name, and a passage
+from the paper. Output ONE short English sentence (≤ 35 words) that situates
+the passage — what topic it discusses and what role it plays in the paper.
+This sentence is prepended to the passage before embedding, so it adds the
+context the passage lost when sliced out of the section.
 
-规则:
-- 输出语言匹配输入(英文段落用英文,中文用中文)
-- 不要总结具体内容,只描述"该段落是关于什么的"以及"它在论文中扮演什么角色"
-- 直接输出一句话,不要 quote、不要前缀(如 "This section..."、"该段落...")
-- 不要超出长度限制
+HARD RULES — violations are bugs:
+1. Output language is ENGLISH. Do not translate or output Chinese.
+2. Do NOT summarize content. Describe what the passage is ABOUT and its role
+   (introduction / method / experiment / discussion).
+3. One sentence, ≤ 35 words. No quotes, no prefixes ("This passage..."),
+   no bullets, no JSON, no newlines.
 """
 
-_USER_TMPL = """论文标题: {title}
-章节: {section_title}
+_SYSTEM_ZH = """你将收到论文标题、章节名、以及一段论文正文。请输出一句简短的中文
+(≤ 60 字)定位句:说明该段落讨论什么主题,以及在论文里扮演的角色。这句话会
+被拼接到段落前面用于嵌入,作用是补回切段时丢失的上下文。
 
-段落:
+硬性规则 — 违反即 bug:
+1. 输出语言为中文,不要翻译成英文,不要混用。
+2. 不要总结具体内容,只描述"段落讲什么"+"在论文里扮演的角色(引言 / 方法 /
+   实验 / 讨论)"。
+3. 一句话,≤ 60 字,不要 quote、不要前缀(如 "该段落..."),不要 bullet、
+   不要 JSON、不要换行。
+"""
+
+_USER_TMPL = """Title: {title}
+Section: {section_title}
+
+Passage:
 {parent_text}
 
-定位句:"""
+Situating sentence:"""
+
+
+def _is_cjk_dominant(text: str) -> bool:
+    """True if >30% of non-whitespace chars are CJK. Most English chunks fail
+    even when authors are Chinese; most Chinese chunks pass even with English
+    citations sprinkled in."""
+    if not text:
+        return False
+    cjk = sum(1 for ch in text if "一" <= ch <= "鿿")
+    visible = sum(1 for ch in text if not ch.isspace())
+    return visible > 0 and cjk / visible > 0.3
 
 
 def _truncate(text: str, max_chars: int) -> str:
@@ -57,9 +83,14 @@ def generate_context_for_parent(
     """Single LLM call. Returns one short line of situating context, or empty
     string on failure (caller falls back to embedding raw text).
     """
+    # Pick the system prompt by the passage's dominant language. Putting the
+    # rule in the system role rather than in the user payload makes LLMs that
+    # default to Chinese (DeepSeek, Qwen) actually respect English-output
+    # requests on English passages.
+    system = _SYSTEM_ZH if _is_cjk_dominant(parent_text) else _SYSTEM_EN
     client = get_llm_client()
     messages = [
-        {"role": "system", "content": _SYSTEM},
+        {"role": "system", "content": system},
         {
             "role": "user",
             "content": _USER_TMPL.format(
