@@ -75,7 +75,9 @@ def _parse_to_chunks(document: Document, raw: RawDocument) -> tuple[list[ChunkDa
             pdf_path = download(raw)
         if pdf_path:
             document.pdf_path = str(pdf_path)
-            parsed = parse_pdf(pdf_path)
+            # content_hash drives the parser_router cache so the same paper
+            # version routes to the same parser across re-ingests / backfills.
+            parsed = parse_pdf(pdf_path, content_hash=document.content_hash)
             if parsed:
                 cleaned_full = clean_text(parsed.full_text)
                 target_dir = settings.fulltext_storage_dir / document.source
