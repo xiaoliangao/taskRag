@@ -256,6 +256,60 @@ export default function DiscoverPage() {
               message={`部分源被限流:${results.rate_limited_sources.join(", ")} — 已自动 fallback`}
             />
           )}
+
+          {results.expanded_keywords.length > 1 && (
+            <div
+              style={{
+                marginBottom: 12,
+                padding: "8px 12px",
+                background: "var(--accent-bg-soft)",
+                border: "1px solid var(--border-default)",
+                borderRadius: "var(--radius-sm)",
+                fontSize: 12,
+                color: "var(--text-secondary)",
+                display: "flex",
+                flexWrap: "wrap",
+                gap: 6,
+                alignItems: "center",
+              }}
+            >
+              <span
+                style={{
+                  fontFamily: "var(--font-mono)",
+                  fontSize: 10,
+                  letterSpacing: "0.08em",
+                  textTransform: "uppercase",
+                  color: "var(--text-tertiary)",
+                }}
+              >
+                已扩展为
+              </span>
+              {results.expanded_keywords.map((kw) => (
+                <Tag
+                  key={kw}
+                  style={{
+                    background: "var(--bg-surface)",
+                    border: "1px solid var(--border-default)",
+                    color: "var(--text-primary)",
+                    fontFamily: "var(--font-mono)",
+                    fontSize: 11,
+                    margin: 0,
+                  }}
+                >
+                  {kw}
+                </Tag>
+              ))}
+              <span
+                style={{
+                  marginLeft: "auto",
+                  fontSize: 10,
+                  color: "var(--text-tertiary)",
+                }}
+              >
+                结果已按相关度重排
+              </span>
+            </div>
+          )}
           <div
             style={{
               display: "flex",

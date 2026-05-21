@@ -13,11 +13,13 @@ from datetime import UTC, datetime, timedelta
 
 from app.collectors.base import RawDocument, dedupe_raw_docs
 from app.core.config import get_settings
+from app.rag.reranker import get_reranker
 from app.services.picker_service import _redis_client, _search_preview_for_source
 
 log = logging.getLogger(__name__)
 
 _DEFAULT_SOURCES = ["arxiv", "openalex", "semantic_scholar"]
+_RERANK_SCORE_FLOOR = 0.18  # results below this against the user query are dropped
 
 
 def _discover_cache_key(sources: list[str], keywords: list[str], limit: int) -> str:
@@ -29,16 +31,55 @@ def _discover_cache_key(sources: list[str], keywords: list[str], limit: int) -> 
     return f"discover:v1:{digest}"
 
 
+def _rerank_and_filter(
+    user_query: str, docs: list[RawDocument]
+) -> list[RawDocument]:
+    """Score (title + abstract) against the user's original query with the local
+    bge-reranker, sort desc, drop the long tail below the score floor.
+
+    Falls back to the input order on reranker failure — never hides results
+    just because the local model is unavailable. The floor (`_RERANK_SCORE_FLOOR`)
+    is intentionally lenient: when the upstream API returned all-noise we'd
+    rather show a thin list than an empty one.
+    """
+    if not docs:
+        return docs
+    rer = get_reranker()
+    passages = [(d.title or "") + "\n" + (d.abstract or "") for d in docs]
+    scores = rer.rerank(user_query, passages)
+    if scores is None:
+        return docs
+    paired = list(zip(docs, scores, strict=True))
+    paired.sort(key=lambda p: p[1], reverse=True)
+    kept = [d for d, s in paired if s >= _RERANK_SCORE_FLOOR]
+    # If the floor cut everything, surface the top 3 regardless so the user
+    # at least sees something instead of an empty state.
+    if not kept and paired:
+        kept = [d for d, _ in paired[:3]]
+    # Stash score on metadata for the UI badge.
+    for (d, s) in paired:
+        if d in kept:
+            d.metadata["rerank_score"] = round(float(s), 3)
+    return kept
+
+
 def discover_search(
     *,
     keywords: list[str],
     sources: list[str] | None,
     limit: int,
     days: int | None = None,
+    user_query: str | None = None,
 ) -> tuple[list[RawDocument], list[str]]:
     """Run the picker fallback chain without any topic context.
 
-    Returns (deduped docs, rate_limited_sources).
+    `keywords` should be the LLM-expanded list (CJK→English) — these are what
+    the collectors actually use as their search filter. `user_query` is the
+    untouched original input, used as the reranker query so the rerank match
+    reflects the user's intent rather than the expanded terms (which are
+    optimised for recall, not for matching the original).
+
+    Returns (deduped+reranked docs, rate_limited_sources).
     """
     settings = get_settings()
     src_list = [s for s in (sources or _DEFAULT_SOURCES) if s in _DEFAULT_SOURCES]
@@ -56,6 +97,10 @@ def discover_search(
             if hit:
                 blob = json.loads(hit)
                 docs = [RawDocument.model_validate(d) for d in blob.get("docs", [])]
+                # Rerank still runs on cache hit — query may differ from cache
+                # key (cache key is the keyword-set; rerank uses original query).
+                if user_query:
+                    docs = _rerank_and_filter(user_query, docs)
                 return docs, list(blob.get("rate_limited", []))
         except Exception as exc:
             log.warning("discover cache read failed: %s", exc)
@@ -92,4 +137,6 @@ def discover_search(
         except Exception as exc:
             log.warning("discover cache write failed: %s", exc)
 
+    if user_query:
+        deduped = _rerank_and_filter(user_query, deduped)
     return deduped, rate_limited

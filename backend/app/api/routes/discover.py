@@ -23,6 +23,7 @@ from app.db.repositories.task_repo import CollectionTaskRepository
 from app.db.repositories.topic_repo import TopicRepository
 from app.schemas.picker import PreviewItem
 from app.schemas.topic import TopicCreate
+from app.services.discover_expansion import expand_query_for_discover
 from app.services.discover_service import discover_search
 from app.services.topic_service import TopicService
 
@@ -55,6 +56,9 @@ class DiscoverSearchResponse(BaseModel):
     items: list[PreviewItem]
     rate_limited_sources: list[str]
     sources_queried: list[str]
+    # Echo of what the system actually searched for — lets the UI show
+    # "已扩展为 object detection / 目标检测" so users understand recall.
+    expanded_keywords: list[str]
 
 
 class DiscoverIngestRequest(BaseModel):
@@ -77,24 +81,39 @@ class DiscoverIngestResponse(BaseModel):
 async def discover_search_route(
     body: DiscoverSearchRequest, _user: CurrentUserDep
 ) -> DiscoverSearchResponse:
-    keywords = [k.strip() for k in body.query.split(",") if k.strip()] or [body.query.strip()]
+    raw_query = body.query.strip()
+    # First split user-typed commas — these are intentional disjunctions.
+    user_keywords = [k.strip() for k in raw_query.split(",") if k.strip()] or [raw_query]
+    # Then LLM-expand each segment (CJK → English research terms; ASCII →
+    # passes through unchanged). Dedupe case-insensitively while preserving
+    # order so the original always comes first.
+    seen = set()
+    expanded: list[str] = []
+    for kw in user_keywords:
+        for v in expand_query_for_discover(kw):
+            if v.lower() not in seen:
+                seen.add(v.lower())
+                expanded.append(v)
+
     requested = [s for s in body.sources if s in _SEARCHABLE_SOURCES]
     if requested:
         ordered_sources = requested
-    elif _has_cjk(body.query):
-        # CJK query: skip arxiv direct (English-only full-text → 35s timeout
-        # for nothing). OpenAlex/SS index DOI metadata covering Chinese-titled
-        # papers; arxiv preprints that match still surface via OpenAlex's
-        # arxiv_id fallback in the OpenAlex collector.
+    elif _has_cjk(raw_query) and any(not _has_cjk(k) for k in expanded):
+        # Mixed CJK+English after expansion: arxiv direct is still useful for
+        # the English terms; keep it but put it last so timeouts don't block.
+        ordered_sources = ["openalex", "semantic_scholar", "arxiv"]
+    elif _has_cjk(raw_query):
+        # Pure CJK survived expansion → arxiv is useless.
         ordered_sources = ["openalex", "semantic_scholar"]
     else:
         ordered_sources = list(_SEARCHABLE_SOURCES)
 
     docs, rate_limited = discover_search(
-        keywords=keywords,
+        keywords=expanded,
         sources=ordered_sources,
         limit=body.limit,
         days=body.days,
+        user_query=raw_query,
     )
     items = [
         PreviewItem(
@@ -116,6 +135,7 @@ async def discover_search_route(
         items=items,
         rate_limited_sources=rate_limited,
         sources_queried=ordered_sources,
+        expanded_keywords=expanded,
     )
 
 

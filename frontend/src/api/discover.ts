@@ -12,6 +12,7 @@ export interface DiscoverSearchResponse {
   items: PreviewItem[];
   rate_limited_sources: string[];
   sources_queried: string[];
+  expanded_keywords: string[];
 }
 
 export interface DiscoverIngestRequest {
