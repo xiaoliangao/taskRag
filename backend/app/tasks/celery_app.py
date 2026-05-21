@@ -79,6 +79,12 @@ celery_app.conf.update(
             "task": "app.tasks.schedule_tasks.enqueue_daily_pulses_task",
             "schedule": schedule(900.0),
         },
+        "scan-topic-signals": {
+            # Re-score breakthrough signals across active topics every 6h. Drives
+            # the 🔥 badge in Pulse / Inbox via document_signals.
+            "task": "app.tasks.schedule_tasks.enqueue_topic_signal_refresh_task",
+            "schedule": schedule(6 * 3600.0),
+        },
     },
     broker_connection_retry_on_startup=True,
 )

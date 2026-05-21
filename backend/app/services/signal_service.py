@@ -9,7 +9,11 @@ from sqlalchemy.orm import Session
 
 from app.db.models.document import Document, TopicDocument
 from app.db.models.intel import TopicDocumentInsight, UserDocumentState
-from app.db.models.research_ext import TopicTrendItem, TopicTrendRun
+from app.db.models.research_ext import (
+    MethodEvolutionEdge,
+    TopicTrendItem,
+    TopicTrendRun,
+)
 from app.db.repositories.research_ext_repo import DocumentSignalRepository
 
 log = logging.getLogger(__name__)
@@ -80,26 +84,44 @@ class SignalService:
                     if isinstance(doc_id, int):
                         trend_overlap_map[doc_id] = trend_overlap_map.get(doc_id, 0) + 1
 
+        # Method-pivot: documents cited as evidence on method evolution edges
+        # are likely turning points; promote them. Counts unique edges, not
+        # repeated mentions of the same edge.
+        method_pivot_map: dict[int, int] = {}
+        evolution_edges = (
+            self.db.query(MethodEvolutionEdge)
+            .filter(MethodEvolutionEdge.topic_id == topic_id)
+            .all()
+        )
+        for edge in evolution_edges:
+            for doc_id in edge.evidence_document_ids or []:
+                if isinstance(doc_id, int):
+                    method_pivot_map[doc_id] = method_pivot_map.get(doc_id, 0) + 1
+
         inserted = 0
         for doc, insight in rows:
             relevance = float(insight.relevance_score) if insight and insight.relevance_score else 0.4
             fav = favorite_map.get(doc.id, 0)
             overlap = trend_overlap_map.get(doc.id, 0)
+            pivot = method_pivot_map.get(doc.id, 0)
             recency = 0.0
             if doc.published_at and doc.published_at >= recent_cutoff:
                 age_days = max(1.0, (now - doc.published_at).days)
                 recency = max(0.0, 1.0 - age_days / 180.0)
 
             score = round(
-                0.45 * relevance
-                + 0.25 * min(1.0, overlap / 3.0)
-                + 0.20 * min(1.0, fav / 2.0)
+                0.40 * relevance
+                + 0.20 * min(1.0, overlap / 3.0)
+                + 0.15 * min(1.0, fav / 2.0)
+                + 0.15 * min(1.0, pivot / 2.0)
                 + 0.10 * recency,
                 3,
             )
             reasons = []
             if overlap:
                 reasons.append(f"与 {overlap} 个升温/新兴趋势词相关")
+            if pivot:
+                reasons.append(f"作为 {pivot} 条方法演化的证据 — 拐点候选")
             if fav:
                 reasons.append(f"被收藏 {fav} 次")
             if recency > 0:
@@ -112,6 +134,7 @@ class SignalService:
                 "relevance_score": relevance,
                 "favorite_count": fav,
                 "trend_overlap": overlap,
+                "method_pivot_count": pivot,
                 "recency": round(recency, 3),
             }
 

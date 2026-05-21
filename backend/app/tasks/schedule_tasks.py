@@ -76,3 +76,26 @@ def enqueue_daily_pulses_task() -> dict:
             )
             enqueued.append(t.id)
     return {"enqueued_topic_ids": enqueued}
+
+
+@celery_app.task(name="app.tasks.schedule_tasks.enqueue_topic_signal_refresh_task")
+def enqueue_topic_signal_refresh_task() -> dict:
+    """Periodic re-score of breakthrough signals across active topics.
+
+    Cheap: just dispatches `refresh_topic_signals_task` for each enabled topic;
+    the actual work happens inside that task with its own DB session.
+    """
+    from app.tasks.research_tasks import refresh_topic_signals_task
+
+    Session = get_sync_sessionmaker()
+    enqueued: list[int] = []
+    with Session() as db:
+        topics = db.query(Topic).filter(Topic.enabled.is_(True)).all()
+        for t in topics:
+            refresh_topic_signals_task.apply_async(
+                kwargs=dict(topic_id=t.id), queue="intelligence"
+            )
+            enqueued.append(t.id)
+    if enqueued:
+        log.info("enqueued signal refresh for %d topics", len(enqueued))
+    return {"enqueued_topic_ids": enqueued}
