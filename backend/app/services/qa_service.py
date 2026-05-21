@@ -254,6 +254,31 @@ async def answer_nonstream(
     llm = _llm_for_user(user)
     content = llm.complete(messages)
 
+    # Self-RAG (Wave-3.5): for multi_step queries, judge the first answer
+    # and retry once if it's unfaithful. We re-classify here rather than
+    # threading the route through _gather_context's return to keep the
+    # interface narrow. Cached classify_query is essentially free on a
+    # repeat call within the same request.
+    try:
+        from app.rag.query_router import classify_query
+        from app.services.self_rag import critique_and_maybe_retry
+
+        if classify_query(question) == "multi_step":
+            result = await critique_and_maybe_retry(
+                db=db,
+                topic_id=chat.topic_id,
+                question=question,
+                initial_answer=content,
+                initial_citations=citations,
+                history=history,
+            )
+            if result.audit.get("retried"):
+                content = result.answer
+                citations = result.citations
+                log.info("self_rag retry adopted for chat=%s", chat.id)
+    except Exception as exc:
+        log.warning("self_rag skipped: %s", exc)
+
     public_citations = [c.to_dict(drop_text=True) for c in citations]
     assistant_msg = await chats.add_message(
         session_id=chat.id,
