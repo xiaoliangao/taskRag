@@ -203,6 +203,65 @@ class OpenAlexCollector(BaseCollector):
             raise CollectorRateLimitedError(self.source, last_detail)
         return out
 
+    def fetch_by_doi(self, doi: str) -> RawDocument | None:
+        """Lookup a single work by DOI via OpenAlex's /works/doi:{doi} route."""
+        norm = doi.strip()
+        norm = norm.removeprefix("https://doi.org/").removeprefix("http://doi.org/").removeprefix("doi:")
+        if not norm:
+            return None
+        headers = {
+            "Accept": "application/json",
+            "User-Agent": f"TaskRAG/0.1 (mailto:{POLITE_MAILTO})",
+        }
+        try:
+            with httpx.Client(timeout=self._timeout, headers=headers) as client:
+                resp = client.get(
+                    f"{OA_BASE}/works/doi:{norm}",
+                    params={"select": FIELDS, "mailto": POLITE_MAILTO},
+                )
+                if resp.status_code == 404:
+                    return None
+                if resp.status_code >= 400:
+                    log.warning("OpenAlex DOI lookup %d for '%s': %s", resp.status_code, norm, resp.text[:200])
+                    return None
+                return self._work_to_raw(resp.json(), matched_keyword=f"doi:{norm}")
+        except Exception as exc:
+            log.warning("OpenAlex DOI lookup exception for '%s': %s", norm, exc)
+            return None
+
+    def search_by_title(self, title: str, limit: int = 5) -> list[RawDocument]:
+        """Title-targeted fuzzy search using OpenAlex `title.search:` filter."""
+        q = title.strip()
+        if not q:
+            return []
+        headers = {
+            "Accept": "application/json",
+            "User-Agent": f"TaskRAG/0.1 (mailto:{POLITE_MAILTO})",
+        }
+        out: list[RawDocument] = []
+        try:
+            with httpx.Client(timeout=self._timeout, headers=headers) as client:
+                resp = client.get(
+                    f"{OA_BASE}/works",
+                    params={
+                        "filter": f"title.search:{q}",
+                        "per-page": min(limit, 25),
+                        "sort": "relevance_score:desc",
+                        "select": FIELDS,
+                        "mailto": POLITE_MAILTO,
+                    },
+                )
+                if resp.status_code >= 400:
+                    log.warning("OpenAlex title search %d: %s", resp.status_code, resp.text[:200])
+                    return []
+                for work in resp.json().get("results", []) or []:
+                    raw = self._work_to_raw(work, matched_keyword=f"title:{q[:40]}")
+                    if raw:
+                        out.append(raw)
+        except Exception as exc:
+            log.warning("OpenAlex title search exception: %s", exc)
+        return out
+
     def _work_to_raw(self, work: dict, matched_keyword: str) -> RawDocument | None:
         title = (work.get("title") or "").strip()
         if not title:

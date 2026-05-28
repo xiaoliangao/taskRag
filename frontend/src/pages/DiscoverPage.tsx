@@ -28,10 +28,27 @@ import { useMemo, useState } from "react";
 import { apiErrorMessage } from "../api/client";
 import {
   discoverIngest,
+  discoverLookup,
   discoverSearch,
   type DiscoverSearchResponse,
 } from "../api/discover";
 import { listTopics, type PreviewItem } from "../api/topics";
+
+// Client-side mirror of backend `detect_lookup_kind`. Used purely as a UX hint
+// so we can show "识别为 DOI / arXiv ID" and offer the精确查找 button. The
+// backend re-detects authoritatively, so a wrong hint here is harmless.
+const DOI_RE = /^10\.\d{4,9}\/\S+$/i;
+const ARXIV_RE = /^\d{4}\.\d{4,5}(v\d+)?$/i;
+function detectKind(s: string): "doi" | "arxiv" | "title" {
+  const v = s
+    .trim()
+    .replace(/^https?:\/\/doi\.org\//i, "")
+    .replace(/^doi:/i, "")
+    .replace(/^arxiv:/i, "");
+  if (DOI_RE.test(v)) return "doi";
+  if (ARXIV_RE.test(v)) return "arxiv";
+  return "title";
+}
 
 const SOURCE_OPTIONS = [
   { label: "arXiv", value: "arxiv" },
@@ -68,11 +85,39 @@ export default function DiscoverPage() {
     queryFn: listTopics,
   });
 
+  const detectedKind = detectKind(query);
+
   const searchMut = useMutation({
     mutationFn: () => discoverSearch({ query: query.trim(), sources, limit, days }),
     onSuccess: (data) => {
       setResults(data);
       setPicked(new Set());
+    },
+    onError: (e) => message.error(apiErrorMessage(e)),
+  });
+
+  // 精确查找 — DOI / arXiv ID / 论文标题. Returns at most 5 candidates with no
+  // keyword expansion or freshness window. The lookup result is shoehorned into
+  // the same DiscoverSearchResponse shape so the existing card UI renders it
+  // verbatim, including the "入库到 ↓" picker flow.
+  const lookupMut = useMutation({
+    mutationFn: () => discoverLookup(query.trim()),
+    onSuccess: (data) => {
+      setResults({
+        items: data.matches,
+        rate_limited_sources: [],
+        sources_queried:
+          data.detected_kind === "arxiv"
+            ? ["arxiv"]
+            : data.detected_kind === "doi"
+              ? ["openalex", "semantic_scholar"]
+              : ["openalex", "arxiv"],
+        expanded_keywords: [],
+      });
+      setPicked(new Set());
+      if (data.matches.length === 0) {
+        message.info(`未找到匹配的论文(识别为 ${data.detected_kind})`);
+      }
     },
     onError: (e) => message.error(apiErrorMessage(e)),
   });
@@ -121,7 +166,21 @@ export default function DiscoverPage() {
       message.warning("先输入想搜什么");
       return;
     }
-    searchMut.mutate();
+    // Auto-route DOI / arXiv ID to the精确查找 endpoint — keyword search would
+    // either time out or return garbage on these inputs.
+    if (detectedKind !== "title") {
+      lookupMut.mutate();
+    } else {
+      searchMut.mutate();
+    }
+  };
+
+  const submitLookup = () => {
+    if (!query.trim()) {
+      message.warning("先输入论文标题/DOI/arXiv ID");
+      return;
+    }
+    lookupMut.mutate();
   };
 
   const ingestTarget = (topicId?: number) => {
@@ -194,12 +253,25 @@ export default function DiscoverPage() {
           size="large"
           allowClear
           prefix={<SearchOutlined />}
-          placeholder="输入主题、论文名片段、关键词。多个关键词用英文逗号分隔。"
+          placeholder="主题 / 关键词 / 论文标题片段;或粘贴 DOI、arXiv ID(自动识别)"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           onPressEnter={submitSearch}
-          style={{ fontFamily: "var(--font-mono)", fontSize: 14, marginBottom: 12 }}
+          style={{ fontFamily: "var(--font-mono)", fontSize: 14, marginBottom: 8 }}
         />
+        {query.trim() && detectedKind !== "title" && (
+          <div
+            style={{
+              fontFamily: "var(--font-mono)",
+              fontSize: 11,
+              color: "var(--accent)",
+              marginBottom: 10,
+              letterSpacing: "0.04em",
+            }}
+          >
+            ◇ 识别为 {detectedKind === "doi" ? "DOI" : "arXiv ID"} — 回车将精确查找
+          </div>
+        )}
         <Space wrap size={12} align="center">
           <Select
             mode="multiple"
@@ -233,18 +305,26 @@ export default function DiscoverPage() {
             />
           </Space>
           <Button
+            icon={<SearchOutlined />}
+            onClick={submitLookup}
+            loading={lookupMut.isPending}
+            style={{ marginLeft: "auto" }}
+            title="按标题精确查找(不做关键词扩展,不限时间窗)"
+          >
+            精确查找
+          </Button>
+          <Button
             type="primary"
             icon={<SearchOutlined />}
             onClick={submitSearch}
-            loading={searchMut.isPending}
-            style={{ marginLeft: "auto" }}
+            loading={searchMut.isPending || lookupMut.isPending}
           >
             搜索
           </Button>
         </Space>
       </div>
 
-      {searchMut.isPending ? (
+      {searchMut.isPending || lookupMut.isPending ? (
         <Skeleton active paragraph={{ rows: 6 }} />
       ) : results ? (
         <>

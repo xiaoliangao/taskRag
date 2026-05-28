@@ -24,7 +24,7 @@ from app.db.repositories.topic_repo import TopicRepository
 from app.schemas.picker import PreviewItem
 from app.schemas.topic import TopicCreate
 from app.services.discover_expansion import expand_query_for_discover
-from app.services.discover_service import discover_search
+from app.services.discover_service import discover_search, lookup_paper
 from app.services.topic_service import TopicService
 
 log = logging.getLogger(__name__)
@@ -150,6 +150,39 @@ async def discover_search_route(
         sources_queried=ordered_sources,
         expanded_keywords=expanded,
     )
+
+
+class DiscoverLookupRequest(BaseModel):
+    value: str = Field(min_length=1, max_length=400)
+
+
+class DiscoverLookupResponse(BaseModel):
+    matches: list[PreviewItem]
+    detected_kind: str  # "doi" | "arxiv" | "title"
+
+
+@router.post("/lookup", response_model=DiscoverLookupResponse)
+async def discover_lookup_route(
+    body: DiscoverLookupRequest, _user: CurrentUserDep
+) -> DiscoverLookupResponse:
+    docs, kind = lookup_paper(body.value)
+    items = [
+        PreviewItem(
+            source=d.source,
+            external_id=d.external_id,
+            title=d.title,
+            authors=d.authors,
+            published_at=d.published_at,
+            url=d.url,
+            abstract=d.abstract,
+            raw_content_url=d.raw_content_url,
+            matched_keyword=d.matched_keyword,
+            metadata=d.metadata,
+            already_in_topic=False,
+        )
+        for d in docs
+    ]
+    return DiscoverLookupResponse(matches=items, detected_kind=kind)
 
 
 @router.post(

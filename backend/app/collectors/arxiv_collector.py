@@ -84,6 +84,24 @@ class ArxivCollector(BaseCollector):
             },
         )
 
+    def fetch_by_id(self, arxiv_id: str) -> RawDocument | None:
+        """Direct lookup by arXiv id (e.g. '2401.12345' or '2401.12345v2').
+
+        Returns None on not-found or network error — callers fall back to other sources.
+        """
+        normalized = self._normalize_id(arxiv_id.strip())
+        if not normalized:
+            return None
+        search = arxiv.Search(id_list=[normalized])
+        try:
+            for r in self._client.results(search):
+                return self._to_raw(r, matched_keyword=f"id:{normalized}")
+        except arxiv.HTTPError as exc:
+            log.warning("arXiv id-lookup failed for '%s': %s", normalized, exc)
+        except Exception as exc:
+            log.warning("arXiv id-lookup exception for '%s': %s", normalized, exc)
+        return None
+
     @staticmethod
     def _normalize_id(raw: str) -> str:
         # Strip URL prefix and version suffix

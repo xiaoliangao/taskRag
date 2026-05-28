@@ -115,6 +115,36 @@ class SemanticScholarCollector(BaseCollector):
             return raw.published_at.replace(tzinfo=UTC) >= since
         return raw.published_at >= since
 
+    def fetch_by_doi(self, doi: str) -> RawDocument | None:
+        """Lookup by DOI via /paper/DOI:{doi}. No-op if no API key (avoid 429 cycle)."""
+        norm = doi.strip()
+        norm = norm.removeprefix("https://doi.org/").removeprefix("http://doi.org/").removeprefix("doi:")
+        if not norm:
+            return None
+        headers: dict[str, str] = {
+            "Accept": "application/json",
+            "User-Agent": "TaskRAG/0.1 (mailto:dev@example.com)",
+        }
+        if self._api_key:
+            headers["x-api-key"] = self._api_key
+        try:
+            with httpx.Client(timeout=self._timeout, headers=headers) as client:
+                resp = client.get(
+                    f"{SS_BASE}/paper/DOI:{norm}",
+                    params={"fields": FIELDS},
+                )
+                if resp.status_code == 404:
+                    return None
+                if resp.status_code == 429 and not self._api_key:
+                    return None
+                if resp.status_code >= 400:
+                    log.warning("SS DOI lookup %d for '%s': %s", resp.status_code, norm, resp.text[:200])
+                    return None
+                return self._paper_to_raw(resp.json(), matched_keyword=f"doi:{norm}")
+        except Exception as exc:
+            log.warning("SS DOI lookup exception for '%s': %s", norm, exc)
+            return None
+
     def _paper_to_raw(self, paper: dict, matched_keyword: str) -> RawDocument | None:
         external_ids = paper.get("externalIds") or {}
         arxiv_id = external_ids.get("ArXiv")

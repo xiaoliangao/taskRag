@@ -11,7 +11,12 @@ import json
 import logging
 from datetime import UTC, datetime, timedelta
 
+import re
+
+from app.collectors.arxiv_collector import ArxivCollector
 from app.collectors.base import RawDocument, dedupe_raw_docs
+from app.collectors.openalex_collector import OpenAlexCollector
+from app.collectors.semantic_scholar_collector import SemanticScholarCollector
 from app.core.config import get_settings
 from app.rag.reranker import get_reranker
 from app.services.picker_service import _redis_client, _search_preview_for_source
@@ -20,6 +25,13 @@ log = logging.getLogger(__name__)
 
 _DEFAULT_SOURCES = ["arxiv", "openalex", "semantic_scholar"]
 _RERANK_SCORE_FLOOR = 0.18  # results below this against the user query are dropped
+
+# Compiled regexes for paper-identifier auto-detection in `lookup_paper`.
+# DOI: prefix 10.<registrant>/... — registrant is 4-9 digits in practice.
+_DOI_RE = re.compile(r"^10\.\d{4,9}/[^\s]+$", re.IGNORECASE)
+# arXiv (post-2007 form): YYMM.NNNNN with optional version. Pre-2007 IDs like
+# `cs.CL/0301001` are exceedingly rare for new uploads — skip them.
+_ARXIV_RE = re.compile(r"^\d{4}\.\d{4,5}(v\d+)?$", re.IGNORECASE)
 
 
 def _discover_cache_key(sources: list[str], keywords: list[str], limit: int) -> str:
@@ -140,3 +152,69 @@ def discover_search(
     if user_query:
         deduped = _rerank_and_filter(user_query, deduped)
     return deduped, rate_limited
+
+
+def detect_lookup_kind(value: str) -> str:
+    """Classify the input as 'doi' | 'arxiv' | 'title'. Title is the catch-all."""
+    s = value.strip()
+    s = s.removeprefix("https://doi.org/").removeprefix("http://doi.org/").removeprefix("doi:")
+    s = s.removeprefix("arXiv:").removeprefix("arxiv:")
+    if _DOI_RE.match(s):
+        return "doi"
+    if _ARXIV_RE.match(s):
+        return "arxiv"
+    return "title"
+
+
+def lookup_paper(value: str) -> tuple[list[RawDocument], str]:
+    """Exact-match lookup by DOI / arXiv id / title fuzzy.
+
+    Returns (matches, detected_kind). Empty list with the detected kind on miss.
+    Falls back gracefully — DOI tries OpenAlex first, then SemanticScholar; title
+    tries OpenAlex (relevance-ranked) then arXiv (title query). Always returns
+    at most 5 candidates; for DOI/arxiv ID typically 1.
+    """
+    raw = (value or "").strip()
+    if not raw:
+        return [], "title"
+    kind = detect_lookup_kind(raw)
+    results: list[RawDocument] = []
+
+    if kind == "arxiv":
+        cleaned = raw
+        for prefix in ("arXiv:", "arxiv:"):
+            cleaned = cleaned.removeprefix(prefix)
+        doc = ArxivCollector().fetch_by_id(cleaned)
+        if doc:
+            results.append(doc)
+    elif kind == "doi":
+        cleaned = raw
+        for prefix in ("https://doi.org/", "http://doi.org/", "doi:"):
+            cleaned = cleaned.removeprefix(prefix)
+        doc = OpenAlexCollector().fetch_by_doi(cleaned)
+        if doc:
+            results.append(doc)
+        else:
+            # Only try SS if OpenAlex missed — SS without key 429s fast, with key it's another check.
+            doc = SemanticScholarCollector().fetch_by_doi(cleaned)
+            if doc:
+                results.append(doc)
+    else:
+        # Title fuzzy: OpenAlex returns relevance-ranked candidates; arxiv search
+        # by `ti:"..."` complements when the paper is preprint-only and OpenAlex
+        # hasn't indexed it. Dedupe via the existing helper.
+        oa = OpenAlexCollector().search_by_title(raw, limit=5)
+        results.extend(oa)
+        if len(results) < 5:
+            try:
+                ax = ArxivCollector().search(
+                    keywords=[raw],
+                    since=datetime.now(tz=UTC) - timedelta(days=3650),
+                    max_results=5 - len(results),
+                )
+                results.extend(ax)
+            except Exception as exc:
+                log.debug("arxiv title-search exception (non-fatal): %s", exc)
+        results = dedupe_raw_docs(results)[:5]
+
+    return results, kind

@@ -39,3 +39,13 @@ export async function discoverIngest(body: DiscoverIngestRequest) {
   const { data } = await client.post<DiscoverIngestResponse>("/discover/ingest", body);
   return data;
 }
+
+export interface DiscoverLookupResponse {
+  matches: PreviewItem[];
+  detected_kind: "doi" | "arxiv" | "title";
+}
+
+export async function discoverLookup(value: string) {
+  const { data } = await client.post<DiscoverLookupResponse>("/discover/lookup", { value });
+  return data;
+}
