@@ -1,10 +1,21 @@
-import { LinkOutlined, FilePdfOutlined, DownloadOutlined } from "@ant-design/icons";
-import { Alert, Button, Drawer, Skeleton, Tabs } from "antd";
-import { useQuery } from "@tanstack/react-query";
+import {
+  DownloadOutlined,
+  FilePdfOutlined,
+  LinkOutlined,
+  StarFilled,
+  StarOutlined,
+} from "@ant-design/icons";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Alert, App, Button, Drawer, Skeleton, Tabs } from "antd";
 import dayjs from "dayjs";
 import { useEffect, useState } from "react";
 
-import { getDocument, getDocumentPdfBlobUrl } from "../api/documents";
+import {
+  favoriteDocument,
+  getDocument,
+  getDocumentPdfBlobUrl,
+  unfavoriteDocument,
+} from "../api/documents";
 import BriefingPanel from "./BriefingPanel";
 import PdfReader from "./pdf/PdfReader";
 
@@ -16,10 +27,35 @@ interface Props {
 }
 
 export default function DocumentDetailDrawer({ topicId, documentId, open, onClose }: Props) {
+  const { message } = App.useApp();
+  const qc = useQueryClient();
   const { data, isLoading } = useQuery({
     queryKey: ["document", topicId, documentId],
     queryFn: () => getDocument(topicId, documentId!),
     enabled: open && documentId != null,
+  });
+
+  const favoriteMut = useMutation({
+    mutationFn: (next: boolean) =>
+      next ? favoriteDocument(documentId!) : unfavoriteDocument(documentId!),
+    onMutate: async (next) => {
+      // Optimistic flip — the star is a noisy interaction; the server round-trip
+      // shouldn't make it feel laggy. Roll back on error.
+      await qc.cancelQueries({ queryKey: ["document", topicId, documentId] });
+      const prev = qc.getQueryData<typeof data>(["document", topicId, documentId]);
+      if (prev) {
+        qc.setQueryData(["document", topicId, documentId], { ...prev, favorite: next });
+      }
+      return { prev };
+    },
+    onError: (_e, _v, ctx) => {
+      if (ctx?.prev) qc.setQueryData(["document", topicId, documentId], ctx.prev);
+      message.error("收藏操作失败,已回退");
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["my-favorites"] });
+      qc.invalidateQueries({ queryKey: ["my-recommendations"] });
+    },
   });
 
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
@@ -115,26 +151,45 @@ export default function DocumentDetailDrawer({ topicId, documentId, open, onClos
         )
       }
       extra={
-        pdfUrl && (
-          <div style={{ display: "flex", gap: 8 }}>
+        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          {data && documentId != null && (
             <Button
               size="small"
-              icon={<DownloadOutlined />}
-              href={pdfUrl}
-              download={`${data?.source}_${documentId}.pdf`}
+              icon={
+                data.favorite ? (
+                  <StarFilled style={{ color: "#f5c518" }} />
+                ) : (
+                  <StarOutlined />
+                )
+              }
+              onClick={() => favoriteMut.mutate(!data.favorite)}
+              loading={favoriteMut.isPending}
+              title={data.favorite ? "取消收藏" : "收藏到「我的收藏」"}
             >
-              下载
+              {data.favorite ? "已收藏" : "收藏"}
             </Button>
-            <Button
-              size="small"
-              icon={<FilePdfOutlined />}
-              href={pdfUrl}
-              target="_blank"
-            >
-              新窗口
-            </Button>
-          </div>
-        )
+          )}
+          {pdfUrl && (
+            <>
+              <Button
+                size="small"
+                icon={<DownloadOutlined />}
+                href={pdfUrl}
+                download={`${data?.source}_${documentId}.pdf`}
+              >
+                下载
+              </Button>
+              <Button
+                size="small"
+                icon={<FilePdfOutlined />}
+                href={pdfUrl}
+                target="_blank"
+              >
+                新窗口
+              </Button>
+            </>
+          )}
+        </div>
       }
     >
       {isLoading || !data ? (

@@ -7,8 +7,9 @@ from pathlib import Path
 
 from fastapi import APIRouter, File, HTTPException, Query, UploadFile
 from fastapi.responses import FileResponse
+from pydantic import BaseModel
 
-from app.api.deps import OwnedTopicDep, SessionDep
+from app.api.deps import CurrentUserDep, OwnedTopicDep, SessionDep
 from app.core.config import get_settings
 from app.core.errors import NotFoundError
 from app.db.repositories.document_repo import (
@@ -16,6 +17,7 @@ from app.db.repositories.document_repo import (
     DocumentRepository,
     TopicDocumentRepository,
 )
+from app.db.repositories.intel_repo import UserDocStateAsyncRepository
 from app.schemas.document import (
     DocumentChunkPublic,
     DocumentDetail,
@@ -91,7 +93,10 @@ async def list_documents(
 
 @router.get("/topics/{topic_id}/documents/{document_id}", response_model=DocumentDetail)
 async def get_document(
-    document_id: int, topic: OwnedTopicDep, db: SessionDep
+    document_id: int,
+    topic: OwnedTopicDep,
+    db: SessionDep,
+    current_user: CurrentUserDep,
 ) -> DocumentDetail:
     assoc = await TopicDocumentRepository(db).get_association(topic.id, document_id)
     if not assoc:
@@ -100,6 +105,8 @@ async def get_document(
     if not doc:
         raise NotFoundError("Document not found")
     chunks = await ChunkRepository(db).list_for_document(document_id)
+    state = await UserDocStateAsyncRepository(db).get(current_user.id, document_id)
+    is_favorite = bool(state and state.favorite)
     full_text: str | None = None
     if doc.full_text_path:
         try:
@@ -119,6 +126,7 @@ async def get_document(
         abstract=doc.abstract,
         full_text=full_text,
         abstract_only=meta.get("abstract_only"),
+        favorite=is_favorite,
         chunks=[
             DocumentChunkPublic(
                 id=c.id,
@@ -153,6 +161,134 @@ async def get_document_pdf(
         filename=filename,
         headers={"Content-Disposition": f'inline; filename="{filename}"'},
     )
+
+
+class FavoritePublic(BaseModel):
+    document_id: int
+    favorite: bool
+
+
+class FavoriteItem(BaseModel):
+    document_id: int
+    source: str
+    title: str
+    authors: list[str]
+    published_at: datetime | None
+    url: str | None
+    abstract: str | None
+    favorited_at: datetime
+    last_opened_at: datetime | None
+    topic_ids: list[int]  # topics this doc is linked into — UI shows badges
+    abstract_only: bool | None
+
+
+class FavoriteListResponse(BaseModel):
+    items: list[FavoriteItem]
+    total: int
+
+
+@router.put("/documents/{document_id}/favorite", response_model=FavoritePublic)
+async def favorite_document(
+    document_id: int,
+    db: SessionDep,
+    current_user: CurrentUserDep,
+) -> FavoritePublic:
+    """Mark this document as favorited by the current user. Idempotent."""
+    doc = await DocumentRepository(db).get_by_id(document_id)
+    if not doc:
+        raise NotFoundError("Document not found")
+    repo = UserDocStateAsyncRepository(db)
+    state = await repo.upsert(
+        current_user.id,
+        document_id,
+        {"favorite": True, "last_opened_at": datetime.now(tz=UTC)},
+    )
+    await db.commit()
+    return FavoritePublic(document_id=document_id, favorite=state.favorite)
+
+
+@router.delete("/documents/{document_id}/favorite", response_model=FavoritePublic)
+async def unfavorite_document(
+    document_id: int,
+    db: SessionDep,
+    current_user: CurrentUserDep,
+) -> FavoritePublic:
+    repo = UserDocStateAsyncRepository(db)
+    await repo.upsert(current_user.id, document_id, {"favorite": False})
+    await db.commit()
+    return FavoritePublic(document_id=document_id, favorite=False)
+
+
+@router.get("/users/me/favorites", response_model=FavoriteListResponse)
+async def list_my_favorites(
+    db: SessionDep,
+    current_user: CurrentUserDep,
+    limit: int = Query(50, ge=1, le=200),
+    offset: int = Query(0, ge=0),
+) -> FavoriteListResponse:
+    """List documents the current user has starred, across all topics, newest-touched first."""
+    from sqlalchemy import func as _func
+    from sqlalchemy import select as _sel
+
+    from app.db.models.document import Document, TopicDocument
+    from app.db.models.intel import UserDocumentState
+
+    # Count first — cheap thanks to the partial index from migration 0017.
+    total_q = await db.execute(
+        _sel(_func.count(UserDocumentState.id)).where(
+            UserDocumentState.user_id == current_user.id,
+            UserDocumentState.favorite.is_(True),
+        )
+    )
+    total = int(total_q.scalar() or 0)
+
+    rr = await db.execute(
+        _sel(UserDocumentState, Document)
+        .join(Document, Document.id == UserDocumentState.document_id)
+        .where(
+            UserDocumentState.user_id == current_user.id,
+            UserDocumentState.favorite.is_(True),
+        )
+        .order_by(
+            UserDocumentState.last_opened_at.desc().nulls_last(),
+            UserDocumentState.updated_at.desc(),
+        )
+        .offset(offset)
+        .limit(limit)
+    )
+    rows = list(rr.all())
+    doc_ids = [d.id for _, d in rows]
+
+    # One bulk query for the topic membership of all docs in the page.
+    topics_by_doc: dict[int, list[int]] = {}
+    if doc_ids:
+        td_rr = await db.execute(
+            _sel(TopicDocument.document_id, TopicDocument.topic_id).where(
+                TopicDocument.document_id.in_(doc_ids)
+            )
+        )
+        for doc_id, topic_id in td_rr.all():
+            topics_by_doc.setdefault(doc_id, []).append(topic_id)
+
+    items: list[FavoriteItem] = []
+    for state, doc in rows:
+        meta = doc.metadata_json or {}
+        items.append(
+            FavoriteItem(
+                document_id=doc.id,
+                source=doc.source,
+                title=doc.title,
+                authors=list(doc.authors or []),
+                published_at=doc.published_at,
+                url=doc.url,
+                abstract=doc.abstract,
+                favorited_at=state.updated_at,
+                last_opened_at=state.last_opened_at,
+                topic_ids=topics_by_doc.get(doc.id, []),
+                abstract_only=meta.get("abstract_only"),
+            )
+        )
+    return FavoriteListResponse(items=items, total=total)
 
 
 @router.post("/topics/{topic_id}/documents/upload", response_model=UploadResponse)

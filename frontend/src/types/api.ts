@@ -70,6 +70,7 @@ export interface DocumentDetail {
   full_text: string | null;
   chunks: DocumentChunkPublic[];
   abstract_only?: boolean | null;
+  favorite?: boolean;
 }
 
 export interface DocumentListResponse {

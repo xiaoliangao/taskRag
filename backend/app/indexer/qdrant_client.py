@@ -176,6 +176,83 @@ def search_for_topics(
     return response.points
 
 
+def fetch_vectors_for_documents(
+    document_ids: Sequence[int], max_per_doc: int | None = None
+) -> dict[int, list[list[float]]]:
+    """Pull child-chunk vectors for the given documents, grouped by document_id.
+
+    Used by the recommendation service to build a centroid representing the
+    user's favorited papers. We only fetch up to `max_per_doc` chunks per doc
+    so that long documents don't dominate the centroid; mid-document chunks
+    tend to be the most representative anyway.
+    """
+    if not document_ids:
+        return {}
+    settings = get_settings()
+    client = get_qdrant()
+    name = settings.qdrant_collection
+    out: dict[int, list[list[float]]] = {}
+    next_offset = None
+    while True:
+        points, next_offset = client.scroll(
+            collection_name=name,
+            scroll_filter=rest.Filter(
+                must=[rest.FieldCondition(key="document_id", match=rest.MatchAny(any=list(document_ids)))]
+            ),
+            with_payload=["document_id"],
+            with_vectors=True,
+            limit=256,
+            offset=next_offset,
+        )
+        if not points:
+            break
+        for p in points:
+            doc_id = int((p.payload or {}).get("document_id") or 0)
+            if not doc_id:
+                continue
+            bucket = out.setdefault(doc_id, [])
+            if max_per_doc is None or len(bucket) < max_per_doc:
+                vec = p.vector
+                if isinstance(vec, list):
+                    bucket.append(vec)
+        if next_offset is None:
+            break
+    return out
+
+
+def search_similar_to_vector(
+    *,
+    query_vector: list[float],
+    exclude_document_ids: Sequence[int] = (),
+    top_k: int = 50,
+) -> list[Any]:
+    """Topic-agnostic similarity search.
+
+    Used by the recommendation engine to surface in-corpus papers similar to
+    the user's favorited centroid, across every topic they have access to.
+    The caller is responsible for filtering by which documents the user can
+    actually see (typically: everything in their own topics).
+    """
+    settings = get_settings()
+    client = get_qdrant()
+    must_not = None
+    if exclude_document_ids:
+        must_not = [
+            rest.FieldCondition(
+                key="document_id", match=rest.MatchAny(any=list(exclude_document_ids))
+            )
+        ]
+    flt = rest.Filter(must_not=must_not) if must_not else None
+    response = client.query_points(
+        collection_name=settings.qdrant_collection,
+        query=query_vector,
+        query_filter=flt,
+        limit=top_k,
+        with_payload=True,
+    )
+    return response.points
+
+
 def delete_points_for_documents(document_ids: Iterable[int]) -> None:
     settings = get_settings()
     client = get_qdrant()

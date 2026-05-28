@@ -9,6 +9,7 @@ import {
   LogoutOutlined,
   PlusOutlined,
   SettingOutlined,
+  StarOutlined,
   ThunderboltOutlined,
 } from "@ant-design/icons";
 import { Badge, Dropdown, Tooltip } from "antd";
@@ -76,6 +77,7 @@ export default function AppLayout() {
 
   const isTopicListActive = location.pathname === "/topics" || location.pathname === "/";
   const isDiscoverActive = location.pathname.startsWith("/discover");
+  const isLibraryActive = location.pathname.startsWith("/library");
   const isCrossTopicActive = location.pathname.startsWith("/qa/cross-topic");
   const isNotificationsActive = location.pathname.startsWith("/notifications");
   const isSettingsActive = location.pathname.startsWith("/settings");
@@ -131,6 +133,13 @@ export default function AppLayout() {
             <AppstoreOutlined />
             <span>所有课题</span>
             <span className="count">{topics?.length ?? 0}</span>
+          </div>
+          <div
+            className={`nav-item ${isLibraryActive ? "active" : ""}`}
+            onClick={() => navigate("/library")}
+          >
+            <StarOutlined />
+            <span>收藏 / 推荐</span>
           </div>
           <div
             className={`nav-item ${isCrossTopicActive ? "active" : ""}`}

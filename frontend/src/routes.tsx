@@ -8,6 +8,7 @@ import AdminHealthPage from "./pages/AdminHealthPage";
 import AdminUsersPage from "./pages/AdminUsersPage";
 import CrossTopicChatPage from "./pages/CrossTopicChatPage";
 import DiscoverPage from "./pages/DiscoverPage";
+import LibraryPage from "./pages/LibraryPage";
 import LoginPage from "./pages/LoginPage";
 import NotificationsPage from "./pages/NotificationsPage";
 import RegisterPage from "./pages/RegisterPage";
@@ -28,6 +29,7 @@ export const router = createBrowserRouter([
     children: [
       { index: true, element: <Navigate to="/topics" replace /> },
       { path: "discover", element: <DiscoverPage /> },
+      { path: "library", element: <LibraryPage /> },
       { path: "topics", element: <TopicListPage /> },
       { path: "topics/:topicId", element: <TopicDetailPage /> },
       { path: "topics/:topicId/:tab", element: <TopicDetailPage /> },

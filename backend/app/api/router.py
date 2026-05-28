@@ -155,3 +155,10 @@ try:
     api_router.include_router(agent.router, tags=["agent"])
 except ImportError:
     pass
+
+try:
+    from app.api.routes import recommendations as _reco_route  # noqa: F401
+
+    api_router.include_router(_reco_route.router, tags=["recommendations"])
+except ImportError:
+    pass

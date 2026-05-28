@@ -42,6 +42,7 @@ class DocumentDetail(BaseModel):
     full_text: str | None = None
     chunks: list[DocumentChunkPublic] = []
     abstract_only: bool | None = None
+    favorite: bool = False  # per-current-user star state
 
 
 class DocumentListResponse(BaseModel):

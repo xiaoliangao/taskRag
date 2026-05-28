@@ -41,3 +41,46 @@ export async function uploadDocumentPdf(
   );
   return data;
 }
+
+// --- Favorites (Wave-4) ---
+
+export interface FavoriteState {
+  document_id: number;
+  favorite: boolean;
+}
+
+export interface FavoriteItem {
+  document_id: number;
+  source: string;
+  title: string;
+  authors: string[];
+  published_at: string | null;
+  url: string | null;
+  abstract: string | null;
+  favorited_at: string;
+  last_opened_at: string | null;
+  topic_ids: number[];
+  abstract_only: boolean | null;
+}
+
+export interface FavoriteListResponse {
+  items: FavoriteItem[];
+  total: number;
+}
+
+export async function favoriteDocument(documentId: number) {
+  const { data } = await client.put<FavoriteState>(`/documents/${documentId}/favorite`);
+  return data;
+}
+
+export async function unfavoriteDocument(documentId: number) {
+  const { data } = await client.delete<FavoriteState>(`/documents/${documentId}/favorite`);
+  return data;
+}
+
+export async function listMyFavorites(limit = 50, offset = 0) {
+  const { data } = await client.get<FavoriteListResponse>("/users/me/favorites", {
+    params: { limit, offset },
+  });
+  return data;
+}
