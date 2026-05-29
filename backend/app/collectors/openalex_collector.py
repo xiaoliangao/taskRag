@@ -28,8 +28,19 @@ OA_BASE = "https://api.openalex.org"
 POLITE_MAILTO = "dev@example.com"  # also surfaces in User-Agent
 FIELDS = (
     "id,doi,ids,title,publication_date,abstract_inverted_index,authorships,"
-    "open_access,primary_location,locations,type"
+    "open_access,primary_location,locations,type,"
+    "referenced_works,cited_by_count,counts_by_year"
 )
+
+
+def _short_wid(s: str | None) -> str | None:
+    """Trailing 'W123…' id from an OpenAlex work URL/id."""
+    if not s:
+        return None
+    s = str(s).strip()
+    if "/" in s:
+        s = s.rsplit("/", 1)[-1]
+    return s or None
 
 
 def _abstract_from_inverted(idx: dict | None) -> str | None:
@@ -229,6 +240,32 @@ class OpenAlexCollector(BaseCollector):
             log.warning("OpenAlex DOI lookup exception for '%s': %s", norm, exc)
             return None
 
+    def fetch_by_openalex_id(self, work_id: str) -> RawDocument | None:
+        """Lookup a single work by its OpenAlex id (W…) — used to enrich an
+        already-ingested document with citation metadata."""
+        wid = _short_wid(work_id)
+        if not wid:
+            return None
+        headers = {
+            "Accept": "application/json",
+            "User-Agent": f"TaskRAG/0.1 (mailto:{POLITE_MAILTO})",
+        }
+        try:
+            with httpx.Client(timeout=self._timeout, headers=headers) as client:
+                resp = client.get(
+                    f"{OA_BASE}/works/{wid}",
+                    params={"select": FIELDS, "mailto": POLITE_MAILTO},
+                )
+                if resp.status_code == 404:
+                    return None
+                if resp.status_code >= 400:
+                    log.warning("OpenAlex id lookup %d for '%s': %s", resp.status_code, wid, resp.text[:200])
+                    return None
+                return self._work_to_raw(resp.json(), matched_keyword=f"oaid:{wid}")
+        except Exception as exc:
+            log.warning("OpenAlex id lookup exception for '%s': %s", wid, exc)
+            return None
+
     def search_by_title(self, title: str, limit: int = 5) -> list[RawDocument]:
         """Title-targeted fuzzy search using OpenAlex `title.search:` filter."""
         q = title.strip()
@@ -275,6 +312,19 @@ class OpenAlexCollector(BaseCollector):
         abstract = _abstract_from_inverted(work.get("abstract_inverted_index"))
         pdf_url = _best_pdf_url(work)
         arxiv_id = _arxiv_id_from(work)
+        work_id = _openalex_work_id(work)
+
+        # Citation metadata — carried on every work so the citation-graph module
+        # can build real "A cites B" edges and citation-velocity signals without
+        # a second fetch. referenced_works can be long; cap to keep JSONB lean.
+        cite_meta = {
+            "openalex_id": work_id or None,
+            "cited_by_count": work.get("cited_by_count"),
+            "counts_by_year": work.get("counts_by_year") or [],
+            "referenced_works": [
+                w for w in (_short_wid(r) for r in (work.get("referenced_works") or [])) if w
+            ][:200],
+        }
 
         if arxiv_id:
             # Treat as arxiv document to dedupe across collectors
@@ -291,12 +341,11 @@ class OpenAlexCollector(BaseCollector):
                 metadata={
                     "pdf_url": f"https://arxiv.org/pdf/{arxiv_id}",
                     "via": "openalex",
-                    "openalex_id": _openalex_work_id(work),
                     "doi": (work.get("ids") or {}).get("doi"),
+                    **cite_meta,
                 },
             )
 
-        work_id = _openalex_work_id(work)
         if not work_id:
             return None
         landing = (work.get("primary_location") or {}).get("landing_page_url")
@@ -315,6 +364,7 @@ class OpenAlexCollector(BaseCollector):
                 "via": "openalex",
                 "doi": (work.get("ids") or {}).get("doi"),
                 "type": work.get("type"),
+                **cite_meta,
             },
         )
 

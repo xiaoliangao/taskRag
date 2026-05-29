@@ -162,3 +162,10 @@ try:
     api_router.include_router(_reco_route.router, tags=["recommendations"])
 except ImportError:
     pass
+
+try:
+    from app.api.routes import citations as _citations_route  # noqa: F401
+
+    api_router.include_router(_citations_route.router, tags=["citations"])
+except ImportError:
+    pass
