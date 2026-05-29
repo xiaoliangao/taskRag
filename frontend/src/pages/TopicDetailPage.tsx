@@ -34,6 +34,11 @@ export default function TopicDetailPage() {
 
   const [drawerDocId, setDrawerDocId] = useState<number | null>(null);
   const [drawerPage, setDrawerPage] = useState<number | undefined>(undefined);
+  // "问这段": a question framed from a PDF selection, handed to ChatPanel.
+  // nonce lets the same text be re-asked and re-triggers the prefill effect.
+  const [pendingQuestion, setPendingQuestion] = useState<{ text: string; nonce: number } | null>(
+    null,
+  );
 
   // Deep-link: /topics/:id/documents?doc=123 opens the document drawer.
   // (Library favorites / recommendations link here.)
@@ -60,6 +65,13 @@ export default function TopicDetailPage() {
       searchParams.delete("doc");
       setSearchParams(searchParams, { replace: true });
     }
+  };
+  const askFromSource = (question: string) => {
+    setPendingQuestion((p) => ({ text: question, nonce: (p?.nonce ?? 0) + 1 }));
+    setDrawerDocId(null);
+    setDrawerPage(undefined);
+    // navigate drops ?doc= naturally; ChatPanel mounts (if needed) with the question.
+    navigate(`/topics/${tid}/chat`);
   };
 
   return (
@@ -147,7 +159,13 @@ export default function TopicDetailPage() {
         onChange={(k) => navigate(`/topics/${tid}/${k}`)}
         items={[
           { key: "overview", label: "概览", children: <PulseCard topicId={tid} onJumpDocument={jump} /> },
-          { key: "chat", label: "问答", children: <ChatPanel topicId={tid} onOpenSource={openDoc} /> },
+          {
+            key: "chat",
+            label: "问答",
+            children: (
+              <ChatPanel topicId={tid} onOpenSource={openDoc} pendingQuestion={pendingQuestion} />
+            ),
+          },
           { key: "documents", label: "知识浏览", children: <DocumentList topicId={tid} /> },
           {
             key: "reading-path",
@@ -182,6 +200,7 @@ export default function TopicDetailPage() {
         open={drawerDocId != null}
         initialPage={drawerPage}
         onClose={closeDrawer}
+        onAsk={askFromSource}
       />
     </div>
   );

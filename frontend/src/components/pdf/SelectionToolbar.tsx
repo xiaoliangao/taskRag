@@ -1,6 +1,7 @@
 import {
   HighlightOutlined,
   MessageOutlined,
+  RobotOutlined,
   StarOutlined,
   TranslationOutlined,
 } from "@ant-design/icons";
@@ -8,7 +9,7 @@ import { Button, Space, Tooltip } from "antd";
 
 import type { AnnotationKind } from "../../api/annotations";
 
-export type ToolbarAction = AnnotationKind | "translate";
+export type ToolbarAction = AnnotationKind | "translate" | "ask";
 
 /** Floating popover anchored to a text selection. Four actions: three create
  *  annotations of the corresponding `kind`, the fourth fires translation. */
@@ -18,12 +19,14 @@ export default function SelectionToolbar({
   onPick,
   busy,
   translateEnabled,
+  askEnabled,
 }: {
   visible: boolean;
   anchorRect: { left: number; top: number; width: number } | null;
   onPick: (action: ToolbarAction) => void;
   busy?: boolean;
   translateEnabled?: boolean;
+  askEnabled?: boolean;
 }) {
   if (!visible || !anchorRect) return null;
   return (
@@ -73,6 +76,17 @@ export default function SelectionToolbar({
             onClick={() => onPick("note")}
           />
         </Tooltip>
+        {askEnabled && (
+          <Tooltip title="问这段(带到问答)">
+            <Button
+              type="text"
+              size="small"
+              disabled={busy}
+              icon={<RobotOutlined style={{ color: "var(--accent)" }} />}
+              onClick={() => onPick("ask")}
+            />
+          </Tooltip>
+        )}
         {translateEnabled && (
           <Tooltip title="翻译(中↔英)">
             <Button

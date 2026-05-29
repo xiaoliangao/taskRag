@@ -39,6 +39,9 @@ interface Props {
    *  citation "原文定位" jumps). Best-effort: lands on the page, not the exact
    *  sentence (chunks carry only a page number, not pixel rects). */
   initialPage?: number;
+  /** "问这段": user selected text and wants to ask the chat about it. Receives
+   *  the raw selected text; the caller frames it into a question. */
+  onAskSelection?: (text: string) => void;
 }
 
 interface PendingSelection {
@@ -61,7 +64,13 @@ interface PendingSelection {
  *  multiple `rects` entries — we never collapse to a bounding box, which
  *  would cover whitespace between columns.
  */
-export default function PdfReader({ topicId, documentId, pdfUrl, initialPage }: Props) {
+export default function PdfReader({
+  topicId,
+  documentId,
+  pdfUrl,
+  initialPage,
+  onAskSelection,
+}: Props) {
   const { message } = App.useApp();
   const [annotations, setAnnotations] = useState<Annotation[]>([]);
   const [numPages, setNumPages] = useState(0);
@@ -199,6 +208,11 @@ export default function PdfReader({ topicId, documentId, pdfUrl, initialPage }: 
 
   const handlePick = async (action: ToolbarAction) => {
     if (!pending) return;
+    if (action === "ask") {
+      onAskSelection?.(pending.selected_text);
+      cancelPending();
+      return;
+    }
     if (action === "translate") {
       // Translation is non-destructive — we keep the selection state so the
       // user can also annotate after seeing the translation. Anchor saved
@@ -403,6 +417,7 @@ export default function PdfReader({ topicId, documentId, pdfUrl, initialPage }: 
         onPick={handlePick}
         busy={submitting || translating}
         translateEnabled={translateEnabled}
+        askEnabled={!!onAskSelection}
       />
 
       {translation && (

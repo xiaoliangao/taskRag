@@ -26,6 +26,8 @@ interface Props {
   onClose: () => void;
   /** When set, open straight to the PDF tab and scroll to this page (citation jump). */
   initialPage?: number;
+  /** "问这段": receives a ready-to-send question framed from the PDF selection. */
+  onAsk?: (question: string) => void;
 }
 
 export default function DocumentDetailDrawer({
@@ -34,6 +36,7 @@ export default function DocumentDetailDrawer({
   open,
   onClose,
   initialPage,
+  onAsk,
 }: Props) {
   const { message } = App.useApp();
   const qc = useQueryClient();
@@ -316,6 +319,17 @@ export default function DocumentDetailDrawer({
                         documentId={documentId}
                         pdfUrl={pdfUrl}
                         initialPage={initialPage}
+                        onAskSelection={
+                          onAsk
+                            ? (raw) => {
+                                const quote = raw.trim().replace(/\s+/g, " ").slice(0, 500);
+                                const from = data?.title ? `（摘自《${data.title}》）` : "";
+                                onAsk(
+                                  `请结合本课题资料，解释下面这段内容的含义、背景与依据${from}：\n\n“${quote}”`,
+                                );
+                              }
+                            : undefined
+                        }
                       />
                     ) : null}
                   </div>

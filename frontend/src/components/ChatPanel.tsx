@@ -32,9 +32,13 @@ interface Props {
   topicId: number;
   /** Open a source document (optionally at a page) — wired to the PDF drawer. */
   onOpenSource?: (documentId: number, page?: number) => void;
+  /** "问这段" from the PDF reader: prefill the composer with this question.
+   *  nonce changes on each ask so the same text can be re-sent. Not auto-sent —
+   *  the user reviews/edits then presses send. */
+  pendingQuestion?: { text: string; nonce: number } | null;
 }
 
-export default function ChatPanel({ topicId, onOpenSource }: Props) {
+export default function ChatPanel({ topicId, onOpenSource, pendingQuestion }: Props) {
   const qc = useQueryClient();
   const { message: msg } = App.useApp();
   const [activeSessionId, setActiveSessionId] = useState<number | null>(null);
@@ -48,6 +52,7 @@ export default function ChatPanel({ topicId, onOpenSource }: Props) {
   // surface a spurious "stream error" toast for a user-initiated stop.
   const stoppedRef = useRef(false);
   const scrollRef = useRef<HTMLDivElement | null>(null);
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
 
   const sessionsQ = useQuery({
     queryKey: ["chat-sessions", topicId],
@@ -104,6 +109,21 @@ export default function ChatPanel({ topicId, onOpenSource }: Props) {
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight });
   }, [messagesQ.data, streamBuffer]);
+
+  // "问这段": prefill the composer (don't auto-send) and focus it.
+  useEffect(() => {
+    if (!pendingQuestion?.text) return;
+    setDraft(pendingQuestion.text);
+    requestAnimationFrame(() => {
+      const el = textareaRef.current;
+      if (!el) return;
+      el.focus();
+      el.style.height = "auto";
+      el.style.height = Math.min(el.scrollHeight, 140) + "px";
+      el.scrollIntoView({ block: "nearest" });
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingQuestion?.nonce]);
 
   const send = async () => {
     const content = draft.trim();
@@ -306,6 +326,7 @@ export default function ChatPanel({ topicId, onOpenSource }: Props) {
         </div>
         <div className="chat-input">
           <textarea
+            ref={textareaRef}
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
             placeholder="问点什么…  ⏎ 发送 · Shift+⏎ 换行"
