@@ -32,13 +32,20 @@ interface Props {
   topicId: number;
   /** Open a source document (optionally at a page) — wired to the PDF drawer. */
   onOpenSource?: (documentId: number, page?: number) => void;
-  /** "问这段" from the PDF reader: prefill the composer with this question.
-   *  nonce changes on each ask so the same text can be re-sent. Not auto-sent —
-   *  the user reviews/edits then presses send. */
+  /** "问这段" from the PDF reader: a framed question to ask. nonce changes on
+   *  each ask. Auto-sent once, then the parent clears it via onPendingConsumed. */
   pendingQuestion?: { text: string; nonce: number } | null;
+  /** Called after the pending question has been consumed (sent), so the parent
+   *  can clear it and a remount won't re-fire the same ask. */
+  onPendingConsumed?: () => void;
 }
 
-export default function ChatPanel({ topicId, onOpenSource, pendingQuestion }: Props) {
+export default function ChatPanel({
+  topicId,
+  onOpenSource,
+  pendingQuestion,
+  onPendingConsumed,
+}: Props) {
   const qc = useQueryClient();
   const { message: msg } = App.useApp();
   const [activeSessionId, setActiveSessionId] = useState<number | null>(null);
@@ -110,23 +117,8 @@ export default function ChatPanel({ topicId, onOpenSource, pendingQuestion }: Pr
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight });
   }, [messagesQ.data, streamBuffer]);
 
-  // "问这段": prefill the composer (don't auto-send) and focus it.
-  useEffect(() => {
-    if (!pendingQuestion?.text) return;
-    setDraft(pendingQuestion.text);
-    requestAnimationFrame(() => {
-      const el = textareaRef.current;
-      if (!el) return;
-      el.focus();
-      el.style.height = "auto";
-      el.style.height = Math.min(el.scrollHeight, 140) + "px";
-      el.scrollIntoView({ block: "nearest" });
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pendingQuestion?.nonce]);
-
-  const send = async () => {
-    const content = draft.trim();
+  const send = async (override?: string) => {
+    const content = (override ?? draft).trim();
     if (!content || streaming) return;
     let sid = activeSessionId;
     if (!sid) {
@@ -200,6 +192,16 @@ export default function ChatPanel({ topicId, onOpenSource, pendingQuestion }: Pr
       qc.invalidateQueries({ queryKey: ["chat-messages", topicId, activeSessionId] });
     }
   };
+
+  // "问这段": auto-send the framed question once, then clear it so a remount
+  // can't re-fire. send() creates a session if there isn't one yet.
+  useEffect(() => {
+    if (!pendingQuestion?.text) return;
+    const q = pendingQuestion.text;
+    onPendingConsumed?.();
+    void send(q);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingQuestion?.nonce]);
 
   const allMessages = useMemo(() => messagesQ.data || [], [messagesQ.data]);
   const lastAssistantCitations = streaming
@@ -358,7 +360,7 @@ export default function ChatPanel({ topicId, onOpenSource, pendingQuestion }: Pr
             <Button
               type="primary"
               icon={<ArrowUpOutlined />}
-              onClick={send}
+              onClick={() => send()}
               disabled={!draft.trim()}
               style={{ width: 36, height: 36, padding: 0, borderRadius: 999 }}
             />

@@ -163,7 +163,12 @@ export default function TopicDetailPage() {
             key: "chat",
             label: "问答",
             children: (
-              <ChatPanel topicId={tid} onOpenSource={openDoc} pendingQuestion={pendingQuestion} />
+              <ChatPanel
+                topicId={tid}
+                onOpenSource={openDoc}
+                pendingQuestion={pendingQuestion}
+                onPendingConsumed={() => setPendingQuestion(null)}
+              />
             ),
           },
           {
