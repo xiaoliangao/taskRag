@@ -60,6 +60,9 @@ class TriggerRunRequest(BaseModel):
     topic_id: int
     label: str = Field(default="adhoc", max_length=120)
     notes: str | None = Field(default=None, max_length=2000)
+    # Opt-in: also generate an answer per question and run the faithfulness
+    # judge. Paid (LLM calls per question) so it defaults off.
+    run_generation: bool = False
 
 
 class TriggerRunResponse(BaseModel):
@@ -152,15 +155,16 @@ async def trigger_run(
 ) -> TriggerRunResponse:
     """Run the eval suite synchronously against `topic_id` and persist a run row.
 
-    Eval takes ~5-30s depending on golden-set size (no LLM judge in MVP, just
-    retrieval). For very large sets this should move to a Celery task — but
-    until then, blocking the admin request is fine: it's an admin tool, not a
-    user-facing path.
+    Eval takes ~5-30s for retrieval-only. With `run_generation` it also runs a
+    generation + faithfulness judge per question (slower + paid), recorded in a
+    separate `faithfulness` block of metrics_json. For very large sets this
+    should move to a Celery task — but until then, blocking the admin request is
+    fine: it's an admin tool, not a user-facing path.
     """
     # Import locally to avoid pulling the eval module at app import time.
     from app.eval.run_eval import _current_commit_sha, _evaluate
 
-    metrics = await _evaluate(db, body.topic_id)
+    metrics = await _evaluate(db, body.topic_id, judge=body.run_generation)
     row = RagEvalRun(
         topic_id=body.topic_id,
         label=body.label,

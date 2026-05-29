@@ -3,6 +3,7 @@ import {
   HistoryOutlined,
   PlusOutlined,
   PushpinOutlined,
+  StopOutlined,
 } from "@ant-design/icons";
 import { App, Button, Segmented, Tooltip } from "antd";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -29,9 +30,11 @@ const CHAT_MODE_OPTIONS = CHAT_MODES.map((m) => ({ label: m.label, value: m.valu
 
 interface Props {
   topicId: number;
+  /** Open a source document (optionally at a page) — wired to the PDF drawer. */
+  onOpenSource?: (documentId: number, page?: number) => void;
 }
 
-export default function ChatPanel({ topicId }: Props) {
+export default function ChatPanel({ topicId, onOpenSource }: Props) {
   const qc = useQueryClient();
   const { message: msg } = App.useApp();
   const [activeSessionId, setActiveSessionId] = useState<number | null>(null);
@@ -41,6 +44,9 @@ export default function ChatPanel({ topicId }: Props) {
   const [memoryOpen, setMemoryOpen] = useState(false);
   const [streamCitations, setStreamCitations] = useState<Citation[]>([]);
   const abortRef = useRef<AbortController | null>(null);
+  // Set right before we abort on purpose so the catch/onError paths don't
+  // surface a spurious "stream error" toast for a user-initiated stop.
+  const stoppedRef = useRef(false);
   const scrollRef = useRef<HTMLDivElement | null>(null);
 
   const sessionsQ = useQuery({
@@ -118,6 +124,7 @@ export default function ChatPanel({ topicId }: Props) {
     setStreaming(true);
     setStreamBuffer("");
     setStreamCitations([]);
+    stoppedRef.current = false;
     const url = streamUrl(topicId, sid!, content);
     const ctrl = new AbortController();
     abortRef.current = ctrl;
@@ -146,6 +153,7 @@ export default function ChatPanel({ topicId }: Props) {
             setStreamBuffer("");
           },
           onError: (m) => {
+            if (stoppedRef.current) return; // user-initiated stop, not an error
             msg.error(m);
             setStreaming(false);
           },
@@ -154,7 +162,22 @@ export default function ChatPanel({ topicId }: Props) {
       );
     } catch (e) {
       setStreaming(false);
+      if (stoppedRef.current) {
+        stoppedRef.current = false;
+        return; // aborted on purpose — swallow the AbortError
+      }
       msg.error(apiErrorMessage(e));
+    }
+  };
+
+  const stop = () => {
+    stoppedRef.current = true;
+    abortRef.current?.abort();
+    setStreaming(false);
+    setStreamBuffer("");
+    // Refetch so the (persisted) user turn shows even though we cut the answer.
+    if (activeSessionId) {
+      qc.invalidateQueries({ queryKey: ["chat-messages", topicId, activeSessionId] });
     }
   };
 
@@ -300,14 +323,25 @@ export default function ChatPanel({ topicId }: Props) {
             }}
             disabled={streaming}
           />
-          <Button
-            type="primary"
-            icon={<ArrowUpOutlined />}
-            onClick={send}
-            loading={streaming}
-            disabled={!draft.trim()}
-            style={{ width: 36, height: 36, padding: 0, borderRadius: 999 }}
-          />
+          {streaming ? (
+            <Tooltip title="停止生成">
+              <Button
+                danger
+                type="primary"
+                icon={<StopOutlined />}
+                onClick={stop}
+                style={{ width: 36, height: 36, padding: 0, borderRadius: 999 }}
+              />
+            </Tooltip>
+          ) : (
+            <Button
+              type="primary"
+              icon={<ArrowUpOutlined />}
+              onClick={send}
+              disabled={!draft.trim()}
+              style={{ width: 36, height: 36, padding: 0, borderRadius: 999 }}
+            />
+          )}
         </div>
       </div>
 
@@ -315,7 +349,7 @@ export default function ChatPanel({ topicId }: Props) {
       <div className="chat-aside">
         <div className="chat-aside-head">引用来源</div>
         <div className="chat-aside-body">
-          <CitationPanel items={lastAssistantCitations} />
+          <CitationPanel items={lastAssistantCitations} onOpenSource={onOpenSource} />
         </div>
       </div>
 

@@ -40,6 +40,45 @@ def _content_hash(raw: RawDocument) -> str:
     return hashlib.sha256(base.encode("utf-8")).hexdigest()
 
 
+_UPLOAD_SOURCES = (SourceType.UPLOAD_PDF.value, "upload")
+
+
+def _chunks_from_pdf_path(
+    document: Document, pdf_path: Path, settings
+) -> tuple[list[ChunkData], str | None] | None:
+    """Parse a local PDF file into chunks + persisted full-text path.
+
+    Returns ``None`` when the file is missing or PyMuPDF can't extract text, so
+    the caller can fall back to abstract-only. On success the document's
+    ``pdf_path`` is set and the full text is written to the fulltext store.
+    """
+    document.pdf_path = str(pdf_path)
+    # content_hash drives the parser cache so the same paper version routes to
+    # the same parser across re-ingests / backfills.
+    parsed = parse_pdf(pdf_path, content_hash=document.content_hash)
+    if not parsed:
+        return None
+    cleaned_full = clean_text(parsed.full_text)
+    target_dir = settings.fulltext_storage_dir / document.source
+    target_dir.mkdir(parents=True, exist_ok=True)
+    target = target_dir / f"{document.external_id.replace('/', '_')}.txt"
+    target.write_text(cleaned_full[: settings.fulltext_max_bytes], encoding="utf-8")
+    fulltext_path = str(target)
+    cleaned_sections = [
+        type(s)(
+            title=s.title,
+            text=clean_text(s.text),
+            page_start=s.page_start,
+            page_end=s.page_end,
+        )
+        for s in parsed.sections
+        if s.text and s.text.strip()
+    ]
+    if cleaned_sections:
+        return split_sections(cleaned_sections), fulltext_path
+    return split_plain_text(cleaned_full, section_title="Body"), fulltext_path
+
+
 def _parse_to_chunks(document: Document, raw: RawDocument) -> tuple[list[ChunkData], str | None]:
     """Return chunks and an optional full_text_path written to disk.
 
@@ -50,12 +89,31 @@ def _parse_to_chunks(document: Document, raw: RawDocument) -> tuple[list[ChunkDa
     callers can distinguish "known full-text" from "never tried".
     """
     settings = get_settings()
-    fulltext_path: str | None = None
 
     def _stamp(abstract_only: bool) -> None:
         meta = dict(document.metadata_json or {})
         meta["abstract_only"] = abstract_only
         document.metadata_json = meta
+
+    def _abstract_fallback() -> tuple[list[ChunkData], str | None]:
+        if raw.abstract:
+            _stamp(True)
+            return split_plain_text(clean_text(raw.abstract), section_title="Abstract"), None
+        _stamp(True)
+        return [], None
+
+    # Uploaded PDFs: parse the locally-stored file directly — no collector
+    # download. (Without this branch uploads fell through to the generic
+    # abstract fallback below, which is empty for uploads, so they silently
+    # SKIPPED and never entered Qdrant/BM25.)
+    if document.source in _UPLOAD_SOURCES:
+        local_path = raw.metadata.get("local_path")
+        if local_path:
+            result = _chunks_from_pdf_path(document, Path(local_path), settings)
+            if result is not None:
+                _stamp(False)
+                return result
+        return _abstract_fallback()
 
     # arXiv (direct or via OpenAlex/SS fallback) + OpenAlex/SS with PDF url.
     if (
@@ -74,37 +132,12 @@ def _parse_to_chunks(document: Document, raw: RawDocument) -> tuple[list[ChunkDa
         if callable(download):
             pdf_path = download(raw)
         if pdf_path:
-            document.pdf_path = str(pdf_path)
-            # content_hash drives the parser_router cache so the same paper
-            # version routes to the same parser across re-ingests / backfills.
-            parsed = parse_pdf(pdf_path, content_hash=document.content_hash)
-            if parsed:
-                cleaned_full = clean_text(parsed.full_text)
-                target_dir = settings.fulltext_storage_dir / document.source
-                target_dir.mkdir(parents=True, exist_ok=True)
-                target = target_dir / f"{document.external_id.replace('/', '_')}.txt"
-                target.write_text(cleaned_full[: settings.fulltext_max_bytes], encoding="utf-8")
-                fulltext_path = str(target)
-                cleaned_sections = [
-                    type(s)(
-                        title=s.title,
-                        text=clean_text(s.text),
-                        page_start=s.page_start,
-                        page_end=s.page_end,
-                    )
-                    for s in parsed.sections
-                    if s.text and s.text.strip()
-                ]
+            result = _chunks_from_pdf_path(document, pdf_path, settings)
+            if result is not None:
                 _stamp(False)
-                if cleaned_sections:
-                    return split_sections(cleaned_sections), fulltext_path
-                return split_plain_text(cleaned_full, section_title="Body"), fulltext_path
+                return result
         # Fallback: abstract only
-        if raw.abstract:
-            _stamp(True)
-            return split_plain_text(clean_text(raw.abstract), section_title="Abstract"), None
-        _stamp(True)
-        return [], None
+        return _abstract_fallback()
 
     # Generic fallback for other sources: use abstract / metadata text if available
     body = raw.abstract or raw.metadata.get("body") or raw.metadata.get("readme") or ""

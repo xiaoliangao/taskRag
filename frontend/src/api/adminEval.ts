@@ -22,6 +22,14 @@ export interface PerQuestionRow {
   [k: string]: unknown;
 }
 
+export interface FaithfulnessBlock {
+  n_judged: number;
+  mean: number | null;
+  unfaithful_count: number;
+  failed: number;
+  gen_top_n: number;
+}
+
 export interface EvalRunDetail extends EvalRunSummary {
   notes: string | null;
   metrics_json: {
@@ -31,6 +39,7 @@ export interface EvalRunDetail extends EvalRunSummary {
     mrr?: number;
     per_tag?: Record<string, Record<string, number>>;
     per_question?: PerQuestionRow[];
+    faithfulness?: FaithfulnessBlock;
   };
 }
 
@@ -48,6 +57,8 @@ export interface TriggerRunRequest {
   topic_id: number;
   label?: string;
   notes?: string;
+  /** Also generate an answer per question + run the faithfulness judge (paid). */
+  run_generation?: boolean;
 }
 
 export interface TriggerRunResponse {

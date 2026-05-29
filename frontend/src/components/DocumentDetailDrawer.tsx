@@ -24,9 +24,17 @@ interface Props {
   documentId: number | null;
   open: boolean;
   onClose: () => void;
+  /** When set, open straight to the PDF tab and scroll to this page (citation jump). */
+  initialPage?: number;
 }
 
-export default function DocumentDetailDrawer({ topicId, documentId, open, onClose }: Props) {
+export default function DocumentDetailDrawer({
+  topicId,
+  documentId,
+  open,
+  onClose,
+  initialPage,
+}: Props) {
   const { message } = App.useApp();
   const qc = useQueryClient();
   const { data, isLoading } = useQuery({
@@ -61,6 +69,14 @@ export default function DocumentDetailDrawer({ topicId, documentId, open, onClos
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
   const [pdfError, setPdfError] = useState<string | null>(null);
   const [pdfLoading, setPdfLoading] = useState(false);
+
+  // Tab selection: default to the briefing, but a citation jump (initialPage)
+  // opens straight to the PDF.
+  const [activeTab, setActiveTab] = useState<string>("briefing");
+  useEffect(() => {
+    if (!open) return;
+    setActiveTab(initialPage != null ? "pdf" : "briefing");
+  }, [open, documentId, initialPage]);
 
   useEffect(() => {
     if (!open || documentId == null) {
@@ -248,7 +264,8 @@ export default function DocumentDetailDrawer({ topicId, documentId, open, onClos
           </div>
 
           <Tabs
-            defaultActiveKey="briefing"
+            activeKey={activeTab}
+            onChange={setActiveTab}
             style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}
             tabBarStyle={{ marginBottom: 8 }}
             items={[
@@ -298,6 +315,7 @@ export default function DocumentDetailDrawer({ topicId, documentId, open, onClos
                         topicId={topicId}
                         documentId={documentId}
                         pdfUrl={pdfUrl}
+                        initialPage={initialPage}
                       />
                     ) : null}
                   </div>

@@ -35,6 +35,10 @@ interface Props {
   topicId: number;
   documentId: number;
   pdfUrl: string;
+  /** When set, scroll to this 1-based page once the PDF has rendered (used by
+   *  citation "原文定位" jumps). Best-effort: lands on the page, not the exact
+   *  sentence (chunks carry only a page number, not pixel rects). */
+  initialPage?: number;
 }
 
 interface PendingSelection {
@@ -57,7 +61,7 @@ interface PendingSelection {
  *  multiple `rects` entries — we never collapse to a bounding box, which
  *  would cover whitespace between columns.
  */
-export default function PdfReader({ topicId, documentId, pdfUrl }: Props) {
+export default function PdfReader({ topicId, documentId, pdfUrl, initialPage }: Props) {
   const { message } = App.useApp();
   const [annotations, setAnnotations] = useState<Annotation[]>([]);
   const [numPages, setNumPages] = useState(0);
@@ -128,6 +132,24 @@ export default function PdfReader({ topicId, documentId, pdfUrl }: Props) {
   }, []);
 
   const onDocLoad = ({ numPages: n }: PDFDocumentProxy) => setNumPages(n);
+
+  // Citation jump: once pages exist, scroll to `initialPage`. Pages render
+  // async, so we wait a beat for layout. Re-runs when a new citation changes
+  // the target page; a ref guards against re-scrolling on zoom/resize.
+  const jumpedToRef = useRef<number | null>(null);
+  useEffect(() => {
+    if (!initialPage || numPages === 0) return;
+    if (jumpedToRef.current === initialPage) return;
+    const target = Math.min(Math.max(1, initialPage), numPages);
+    const t = setTimeout(() => {
+      const node = pageNodes.current[target];
+      if (node) {
+        node.scrollIntoView({ behavior: "smooth", block: "start" });
+        jumpedToRef.current = initialPage;
+      }
+    }, 350);
+    return () => clearTimeout(t);
+  }, [initialPage, numPages]);
 
   // Selection finalizer — converts viewport coords → page-relative ratios.
   const captureSelection = (pageNumber: number, pageEl: HTMLDivElement) => {
@@ -298,6 +320,11 @@ export default function PdfReader({ topicId, documentId, pdfUrl }: Props) {
           />
         </Tooltip>
         <span style={{ marginLeft: "auto" }}>
+          {initialPage ? (
+            <span style={{ color: "var(--accent)", marginRight: 10 }}>
+              已定位第 {initialPage} 页
+            </span>
+          ) : null}
           共 {numPages || "—"} 页 · 选中正文文字即可标注
         </span>
       </div>

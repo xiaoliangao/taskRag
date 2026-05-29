@@ -1,8 +1,8 @@
 import { ArrowLeftOutlined } from "@ant-design/icons";
 import { Skeleton, Tabs } from "antd";
 import { useQuery } from "@tanstack/react-query";
-import { useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 
 import { getTopic } from "../api/topics";
 import ChatPanel from "../components/ChatPanel";
@@ -29,12 +29,38 @@ export default function TopicDetailPage() {
     enabled: !!tid,
   });
 
+  const [searchParams, setSearchParams] = useSearchParams();
+  const docParam = searchParams.get("doc");
+
   const [drawerDocId, setDrawerDocId] = useState<number | null>(null);
+  const [drawerPage, setDrawerPage] = useState<number | undefined>(undefined);
+
+  // Deep-link: /topics/:id/documents?doc=123 opens the document drawer.
+  // (Library favorites / recommendations link here.)
+  useEffect(() => {
+    if (docParam) {
+      setDrawerDocId(Number(docParam));
+      setDrawerPage(undefined);
+    }
+  }, [docParam]);
 
   if (isLoading || !topic) return <Skeleton active />;
 
   const activeTab = tab || "overview";
-  const jump = (docId: number) => setDrawerDocId(docId);
+  const openDoc = (docId: number, page?: number) => {
+    setDrawerDocId(docId);
+    setDrawerPage(page);
+  };
+  const jump = (docId: number) => openDoc(docId);
+  const closeDrawer = () => {
+    setDrawerDocId(null);
+    setDrawerPage(undefined);
+    // Drop ?doc= so the drawer doesn't immediately re-open on re-render.
+    if (docParam) {
+      searchParams.delete("doc");
+      setSearchParams(searchParams, { replace: true });
+    }
+  };
 
   return (
     <div>
@@ -121,7 +147,7 @@ export default function TopicDetailPage() {
         onChange={(k) => navigate(`/topics/${tid}/${k}`)}
         items={[
           { key: "overview", label: "概览", children: <PulseCard topicId={tid} onJumpDocument={jump} /> },
-          { key: "chat", label: "问答", children: <ChatPanel topicId={tid} /> },
+          { key: "chat", label: "问答", children: <ChatPanel topicId={tid} onOpenSource={openDoc} /> },
           { key: "documents", label: "知识浏览", children: <DocumentList topicId={tid} /> },
           {
             key: "reading-path",
@@ -154,7 +180,8 @@ export default function TopicDetailPage() {
         topicId={tid}
         documentId={drawerDocId}
         open={drawerDocId != null}
-        onClose={() => setDrawerDocId(null)}
+        initialPage={drawerPage}
+        onClose={closeDrawer}
       />
     </div>
   );

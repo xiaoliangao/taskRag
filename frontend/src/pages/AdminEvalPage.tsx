@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   App,
   Button,
+  Checkbox,
   Drawer,
   Empty,
   Form,
@@ -81,6 +82,7 @@ function RunDetailDrawer({
 
   const perQ: PerQuestionRow[] = data?.metrics_json?.per_question ?? [];
   const perTag = data?.metrics_json?.per_tag ?? {};
+  const faith = data?.metrics_json?.faithfulness;
 
   const columns: ColumnsType<PerQuestionRow> = [
     { title: "#", dataIndex: "question_id", width: 60 },
@@ -108,6 +110,28 @@ function RunDetailDrawer({
         ) : "—",
     },
     { title: "MRR", dataIndex: "rr", width: 80, render: (v: number) => (typeof v === "number" ? v.toFixed(2) : "—") },
+    // Only present when the run was triggered with generation/judge enabled.
+    ...(faith
+      ? ([
+          {
+            title: "忠实度",
+            dataIndex: "faithfulness",
+            width: 90,
+            render: (v: number | null | undefined) =>
+              typeof v === "number" ? (
+                <span
+                  style={{
+                    color: v >= 0.7 ? "var(--success)" : v >= 0.5 ? "var(--warning)" : "var(--danger)",
+                  }}
+                >
+                  {v.toFixed(2)}
+                </span>
+              ) : (
+                <span style={{ color: DIM }}>—</span>
+              ),
+          },
+        ] as ColumnsType<PerQuestionRow>)
+      : []),
   ];
 
   return (
@@ -133,6 +157,68 @@ function RunDetailDrawer({
               </div>
             ))}
           </div>
+
+          {faith && (
+            <div
+              style={{
+                padding: "12px 16px",
+                background: "var(--bg-surface)",
+                border: "1px solid var(--border-default)",
+                borderRadius: "var(--radius-md)",
+              }}
+            >
+              <div
+                style={{
+                  fontFamily: "var(--font-mono)",
+                  fontSize: 10,
+                  color: DIM,
+                  marginBottom: 8,
+                  letterSpacing: "0.12em",
+                  textTransform: "uppercase",
+                }}
+              >
+                faithfulness · 生成质量 (opt-in · 现跑生成 + LLM judge)
+              </div>
+              <div style={{ display: "flex", gap: 24, flexWrap: "wrap" }}>
+                {[
+                  ["mean", faith.mean],
+                  ["unfaithful", faith.unfaithful_count],
+                  ["failed", faith.failed],
+                  ["n_judged", faith.n_judged],
+                  ["gen_top_n", faith.gen_top_n],
+                ].map(([k, v]) => (
+                  <div key={String(k)} className="metric">
+                    <span
+                      className="value"
+                      style={{
+                        fontSize: 22,
+                        color:
+                          k === "mean" && typeof v === "number"
+                            ? v >= 0.7
+                              ? "var(--success)"
+                              : v >= 0.5
+                                ? "var(--warning)"
+                                : "var(--danger)"
+                            : undefined,
+                      }}
+                    >
+                      {typeof v === "number" ? (v < 10 ? v.toFixed(3) : v) : "—"}
+                    </span>
+                    <span
+                      style={{
+                        color: DIM,
+                        fontFamily: "var(--font-mono)",
+                        fontSize: 11,
+                        textTransform: "uppercase",
+                      }}
+                    >
+                      {String(k)}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           {Object.keys(perTag).length > 0 && (
             <div>
@@ -184,7 +270,12 @@ export default function AdminEvalPage() {
     return items.map((r) => r.recall_at_5);
   }, [runs.data]);
 
-  const [form] = Form.useForm<{ topic_id: number; label: string; notes?: string }>();
+  const [form] = Form.useForm<{
+    topic_id: number;
+    label: string;
+    notes?: string;
+    run_generation?: boolean;
+  }>();
   const trigger = useMutation({
     mutationFn: triggerEvalRun,
     onSuccess: (r) => {
@@ -320,6 +411,14 @@ export default function AdminEvalPage() {
             <Form.Item label="label" name="label" rules={[{ required: true, max: 120 }]}>
               <Input placeholder="如:after-self-rag" />
             </Form.Item>
+            <Form.Item name="run_generation" valuePropName="checked" style={{ marginBottom: 12 }}>
+              <Checkbox>
+                同时评估生成质量（忠实度）
+                <Tooltip title="对每题现跑一次生成 + LLM judge，结果写入 faithfulness 区块。会产生额外 LLM 调用与耗时。">
+                  <span style={{ color: DIM, marginLeft: 6, cursor: "help" }}>ⓘ</span>
+                </Tooltip>
+              </Checkbox>
+            </Form.Item>
             <Button
               type="primary"
               htmlType="submit"
@@ -331,7 +430,7 @@ export default function AdminEvalPage() {
             </Button>
           </Form>
           <Typography.Paragraph type="secondary" style={{ fontSize: 11, marginTop: 8, marginBottom: 0 }}>
-            可能耗时几十秒到几分钟,取决于 golden set 大小。
+            可能耗时几十秒到几分钟,取决于 golden set 大小。勾选忠实度评估会更慢且产生 LLM 费用。
           </Typography.Paragraph>
         </div>
       </div>

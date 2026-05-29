@@ -186,7 +186,7 @@ function FavoritesTab() {
             key={it.document_id}
             it={it}
             onJump={(topicId, documentId) =>
-              navigate(`/topics/${topicId}/docs?doc=${documentId}`)
+              navigate(`/topics/${topicId}/documents?doc=${documentId}`)
             }
             onUnfavorite={(id) => unfavMut.mutate(id)}
           />
@@ -294,7 +294,7 @@ function RecommendCard({
         )}
         {it.in_corpus && it.topic_ids.length > 0 ? (
           it.topic_ids.map((tid) => (
-            <a key={tid} href={`/topics/${tid}/docs?doc=${it.document_id}`}>
+            <a key={tid} href={`/topics/${tid}/documents?doc=${it.document_id}`}>
               <Button size="small" type="primary">
                 查看 (Topic #{tid})
               </Button>
