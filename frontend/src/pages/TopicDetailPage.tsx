@@ -6,7 +6,6 @@ import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 
 import { getTopic } from "../api/topics";
 import ChatPanel from "../components/ChatPanel";
-import CitationGraphView from "../components/CitationGraphView";
 import DocumentDetailDrawer from "../components/DocumentDetailDrawer";
 import DocumentList from "../components/DocumentList";
 import InsightsView from "../components/InsightsView";
@@ -167,7 +166,11 @@ export default function TopicDetailPage() {
               <ChatPanel topicId={tid} onOpenSource={openDoc} pendingQuestion={pendingQuestion} />
             ),
           },
-          { key: "documents", label: "知识浏览", children: <DocumentList topicId={tid} /> },
+          {
+            key: "documents",
+            label: "知识浏览",
+            children: <DocumentList topicId={tid} onAsk={askFromSource} />,
+          },
           {
             key: "reading-path",
             label: "阅读路径",
@@ -187,11 +190,6 @@ export default function TopicDetailPage() {
             key: "map",
             label: "知识图谱",
             children: <TopicMapTab topicId={tid} onJumpDocument={jump} />,
-          },
-          {
-            key: "citations",
-            label: "引用网络",
-            children: <CitationGraphView topicId={tid} onJumpDocument={jump} />,
           },
           { key: "insights", label: "研究洞察", children: <InsightsView topicId={tid} /> },
           { key: "notes", label: "研究笔记", children: <NotesView topicId={tid} /> },

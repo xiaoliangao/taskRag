@@ -5,6 +5,7 @@ import {
   CopyOutlined,
   ReadOutlined,
   ReloadOutlined,
+  ShareAltOutlined,
 } from "@ant-design/icons";
 import {
   App,
@@ -24,6 +25,7 @@ import { exportBibtex, exportMarkdown } from "../api/exports";
 import { generateGlossary, listGlossary } from "../api/glossary";
 import { getGraph, rebuildGraph } from "../api/graph";
 import type { GraphEdge, GraphNode } from "../types/api";
+import CitationGraphView from "./CitationGraphView";
 import MethodTimelineView from "./MethodTimelineView";
 
 interface Props {
@@ -345,7 +347,9 @@ function ExportView({ topicId }: { topicId: number }) {
 }
 
 export default function TopicMapTab({ topicId, onJumpDocument }: Props) {
-  const [sub, setSub] = useState<"graph" | "timeline" | "glossary" | "export">("graph");
+  const [sub, setSub] = useState<"graph" | "citations" | "timeline" | "glossary" | "export">(
+    "graph",
+  );
   return (
     <div>
       <div style={{ marginBottom: 16 }}>
@@ -354,6 +358,7 @@ export default function TopicMapTab({ topicId, onJumpDocument }: Props) {
           onChange={(v) => setSub(v as any)}
           options={[
             { label: "知识图谱", value: "graph", icon: <ClusterOutlined /> },
+            { label: "引用网络", value: "citations", icon: <ShareAltOutlined /> },
             { label: "方法时间线", value: "timeline", icon: <ClockCircleOutlined /> },
             { label: "术语词典", value: "glossary", icon: <ReadOutlined /> },
             { label: "Export Hub", value: "export", icon: <CloudDownloadOutlined /> },
@@ -361,6 +366,9 @@ export default function TopicMapTab({ topicId, onJumpDocument }: Props) {
         />
       </div>
       {sub === "graph" && <GraphView topicId={topicId} onJump={onJumpDocument} />}
+      {sub === "citations" && (
+        <CitationGraphView topicId={topicId} onJumpDocument={onJumpDocument} />
+      )}
       {sub === "timeline" && (
         <MethodTimelineView topicId={topicId} onJumpDocument={onJumpDocument} />
       )}

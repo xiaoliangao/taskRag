@@ -11,6 +11,8 @@ import DocumentDetailDrawer from "./DocumentDetailDrawer";
 
 interface Props {
   topicId: number;
+  /** "问这段" from a doc's PDF — prefilled question handed up to the chat. */
+  onAsk?: (question: string) => void;
 }
 
 const PRIORITY_PILL: Record<string, string> = {
@@ -24,7 +26,7 @@ const PRIORITY_LABEL: Record<string, string> = {
   low: "低优先级",
 };
 
-export default function DocumentList({ topicId }: Props) {
+export default function DocumentList({ topicId, onAsk }: Props) {
   const qc = useQueryClient();
   const { message } = App.useApp();
   const [page, setPage] = useState(1);
@@ -262,6 +264,14 @@ export default function DocumentList({ topicId }: Props) {
         documentId={activeDocId}
         open={activeDocId != null}
         onClose={() => setActiveDocId(null)}
+        onAsk={
+          onAsk
+            ? (q) => {
+                setActiveDocId(null); // close this drawer; parent switches to chat
+                onAsk(q);
+              }
+            : undefined
+        }
       />
     </div>
   );
